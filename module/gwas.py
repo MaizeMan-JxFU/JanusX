@@ -13,13 +13,14 @@ Examples:
   --vcf genotypes.vcf --pheno phenotypes.txt --out results --grm kinship_matrix.txt --qcov 10 --no-AC
   
   # Maximum performance with all threads
-  --bfile genotypes --pheno phenotypes.txt --out results --grm VanRanden --qcov 3 --thread -1
+  --bfile genotypes --pheno phenotypes.txt --out results --grm VanRanden --qcov 3 --cov covfile.txt --thread -1
 
 File Formats:
   VCF/BFILE:    Standard VCF or PLINK binary format (bed/bim/fam)
   PHENO:        Tab-delimited file with sample IDs in first column and phenotypes in subsequent columns
   GRM File:     Space/tab-delimited kinship matrix file
   QCOV File:    Space/tab-delimited covariate matrix file
+  COV File:    Space/tab-delimited covariate matrix file
         
 Citation:
   https://github.com/MaizeMan-JxFU/pyBLUP/
