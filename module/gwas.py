@@ -167,7 +167,7 @@ cov = args.cov
 HighAC = args.AC
 threads = args.thread
 kcal = True if kinship_method in ['VanRanden', 'gemma1', 'gemma2', 'pearson'] else False
-qcal = True if qdim in np.arange(20).astype(str) else False
+qcal = True if qdim in np.arange(1,20).astype(str) else False
 if not os.path.exists(outfolder):
     os.makedirs(outfolder,mode=0o755)
 prefix = gfile.replace('.vcf','').replace('.gz','')
@@ -214,7 +214,9 @@ if qcal or kcal:
             qmatrix = np.array([]).reshape(geno.shape[0],0)
 
 else:
-    if not qcal and os.path.exists(qdim):
+    if qdim == '0':
+        qmatrix = np.array([]).reshape(geno.shape[0],0)
+    elif not qcal and os.path.exists(qdim):
         logger.info(f'* Loading Q matrix from {qdim}...')
         qmatrix = np.genfromtxt(qdim)
     else:

@@ -127,20 +127,20 @@ time ./gemma -bfile data/test -k output/gemma.cXX.txt -lmm -o gemma
 # GEMMA 0.98.5 (2021-08-25) by Xiang Zhou, Pjotr Prins and team (C) 2012-2021
 # Reading Files ... 
 # ## number of total individuals = 6048
-# ## number of analyzed individuals = 3487
+# ## number of analyzed individuals = 3381
 # ## number of covariates = 1
 # ## number of phenotypes = 1
 # ## number of total SNPs/var        =  5694922
-# ## number of analyzed SNPs         =  4832333
+# ## number of analyzed SNPs         =  4828877
 # Start Eigen-Decomposition...
-# pve estimate =0.524857
-# se(pve) =0.0538683
+# pve estimate =0.91255
+# se(pve) =0.00754577
 # ================================================== 100%
 # **** INFO: Done.
 
-# real    191m25.075s
-# user    641m42.165s
-# sys     67m49.511s
+# real    192m26.571s
+# user    627m6.371s
+# sys     60m49.919s
 ```
 
 GCTA:
@@ -269,7 +269,7 @@ pyBLUP:
 # 表型预处理
 awk -F "\t" -v OFS="\t" {'print $1,$2'} ~/data_pub/1.database/RiceAtlas/1.pheno.blup.tsv > data/test.pheno
 # 默认开启所有线程 保持和GCTA一致 使用 --thread 92. 和其他方法保持一致不使用q矩阵
-GWAS gwas --bfile data/test --pheno data/test.pheno --out . --thread 92 --qcov 0
+gtools gwas --bfile data/test --pheno data/test.pheno --out . --thread 92 --qcov 0 --grm gemma1
 # High Performance Linear Mixed Model Solver for Genome-Wide Association Studies
 # Host: user-NF5466M6
 
@@ -399,8 +399,8 @@ GWAS [模块名] [模块命令](后续增加 coloc、gs 等模块)
 
 ```bash
 chmod +755 GWAS # 可将 GWAS 所在文件夹加入环境变量
-GWAS gwas -h # 查看帮助
-GWAS gwas --vcf example/mouse_hs1940.vcf.gz --pheno example/mouse_hs1940.pheno --out test # 用法和 python gwas.py [参数] 一致
+gtools gwas -h # 查看帮助
+gtools gwas --vcf example/mouse_hs1940.vcf.gz --pheno example/mouse_hs1940.pheno --out test # 用法和 python gwas.py [参数] 一致
 ```
 
 使用[测试数据](https://doi.org/10.1038/ng.3609)输出结果如下所示：
