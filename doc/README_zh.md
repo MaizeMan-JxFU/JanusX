@@ -362,15 +362,25 @@ gtools gwas --bfile data/test --pheno data/test.pheno --out . --thread 92 --qcov
 首先需要环境中需要包含 [python](https://www.python.org/downloads/release/python-3139/) (3.9~3.13)
 如果有git基础，以下几行代码即可完成安装啦~
 
+Linux:
+
 ```bash
 # 网络顺畅的情况
-git clone https://github.com/MaizeMan-JxFU/gtools.git
+# git clone https://github.com/MaizeMan-JxFU/gtools.git
 # 不能科学上网可以选择国内代理
 git clone https://gh-proxy.com/https://github.com/MaizeMan-JxFU/gtools.git
 # 进入目标文件夹
-cd gtools
+cd gtools; chmod +x ./install.sh
 # 执行pip安装依赖
 ./install.sh # .\install.bat # windows
+```
+
+Windows
+
+```powershell
+git clone https://gh-proxy.com/https://github.com/MaizeMan-JxFU/gtools.git
+cd gtools
+.\install.bat
 ```
 
 ### 功能1: 全基因组关联分析
