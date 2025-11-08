@@ -3,7 +3,7 @@ name = "gtools"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.9,<3.14"
+requires-python = "==3.13"
 dependencies = [
     "pyblup==1.0.5","gfreader==1.0.5","bioplotkit"
 ]
