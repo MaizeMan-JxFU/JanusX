@@ -1,12 +1,11 @@
 FROM arm64v8/ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
-# arm https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py310_22.11.1-1-Linux-aarch64.sh
 RUN apt-get update --quiet \
     && apt-get install --yes --quiet --no-install-recommends wget
 
 RUN wget "https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py310_22.11.1-1-Linux-aarch64.sh" --no-check-certificate \
-    && ./Miniconda3-py310_22.11.1-1-Linux-aarch64.sh -b -p /app/miniconda \
+    && bash Miniconda3-py310_22.11.1-1-Linux-aarch64.sh -b -p /app/miniconda \
     && rm Miniconda3-py310_22.11.1-1-Linux-aarch64.sh \
     && apt-get remove -y wget \
     && apt-get autoremove -y \
@@ -16,11 +15,11 @@ WORKDIR /app/gtools
 COPY . .
 ENV PATH="/app/gtools:/app/miniconda/bin:$PATH"
 
-ENV UV_PYTHON_INSTALL_MIRROR="https://gh-proxy.com/https://github.com/astral-sh/python-build-standalone/releases/download"
-
-RUN chmod +x ./install.sh; ./install.sh \
+RUN pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple \
+    && pip install pyblup==1.0.5 gfreader==1.0.5 bioplotkit \
     && /app/miniconda/bin/conda clean -afy \
-    && python -m uv cache clean && python -m pip cache purge \
+    && python -m pip cache purge \
+    && mv doc/docker.sh gtools && chmod +x ./gtools \
     && ./gtools gwas -h
 
 ENTRYPOINT ["gtools"]
