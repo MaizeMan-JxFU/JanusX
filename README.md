@@ -9,10 +9,10 @@
 ```shell
 git clone https://github.com/MaizeMan-JxFU/gtools.git
 cd gtools
+sh ./install.sh # unix
+./gtools gwas --vcf example/mouse_hs1940.vcf.gz --pheno example/mouse_hs1940.pheno --out test
 # .\install.bat # windows
 # .\gtools gwas --vcf example/mouse_hs1940.vcf.gz --pheno example/mouse_hs1940.pheno --out test
-chmod +x ./install.sh; ./install.sh # unix
-./gtools gwas --vcf example/mouse_hs1940.vcf.gz --pheno example/mouse_hs1940.pheno --out test
 
 ```
 

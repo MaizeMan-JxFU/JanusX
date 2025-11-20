@@ -354,9 +354,7 @@ Linux:
 # 不能科学上网可以选择国内代理
 git clone https://gh-proxy.com/https://github.com/MaizeMan-JxFU/gtools.git
 # 进入目标文件夹
-cd gtools; chmod +x ./install.sh
-# 执行pip安装依赖
-./install.sh # .\install.bat # windows
+cd gtools; sh ./install.sh
 
 ```
 
