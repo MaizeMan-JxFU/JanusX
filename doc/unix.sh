@@ -6,6 +6,8 @@ VENV_PYLAUCH="$SCRIPT_DIR/.venv/bin/python"
 MODULE_NAME=$1
 MODULE=${MODULE_NAME/.py/}
 
+cat $SCRIPT_DIR/fig/log.txt
+
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "Usage: $0 <module> [parameter]"
     echo "Modules:" $(ls $MODULE_DIR | grep -v "_")
