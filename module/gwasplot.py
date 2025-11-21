@@ -1,15 +1,4 @@
-from _readanno import readanno
-from bioplotkit import GWASPLOT
-import matplotlib.pyplot as plt
-import pandas as pd
-import numpy as np
-import argparse
-import time
-import socket
-import logging
-import sys
-import os
-import matplotlib as mpl
+# -*- coding: utf-8 -*-
 '''
 Examples:
   # Basic usage with gwasplot
@@ -25,6 +14,18 @@ File Formats:
 Citation:
   https://github.com/MaizeMan-JxFU/gwasplot/
 '''
+from _readanno import readanno
+from bioplotkit import GWASPLOT
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+import argparse
+import time
+import socket
+import logging
+import sys
+import os
+import matplotlib as mpl
 def setup_logging(log_file_path):
     """set logging"""
     if os.path.exists(log_file_path) and log_file_path[-4:]=='.log':

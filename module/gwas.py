@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 '''
 Examples:
   # Basic usage with VCF file
