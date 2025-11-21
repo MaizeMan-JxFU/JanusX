@@ -6,6 +6,8 @@ VENV_PYLAUCH="python"
 MODULE_NAME=$1
 MODULE=${MODULE_NAME/.py/}
 
+cat $SCRIPT_DIR/fig/log.txt
+
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
     echo "Usage: $0 <module> [parameter]"
     echo "Modules:" $(ls $MODULE_DIR | grep -v "_")
@@ -16,5 +18,5 @@ if [ -f "$MODULE_DIR/$MODULE.py" ];then
     shift
     $VENV_PYLAUCH -u $MODULE_DIR/$MODULE.py $@
 else
-    echo "Unkwown module: $MODULE;" "Installed modules:" $(ls $MODULE_DIR | grep -v "_")
+    echo "Unkwown module: $MODULE;" "Installed modules:" $(ls $MODULE_DIR | grep -v "_" | sed 's/.py//')
 fi
