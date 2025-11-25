@@ -193,6 +193,13 @@ if not os.path.exists(outfolder):
     os.makedirs(outfolder,mode=0o755)
 prefix = gfile.replace('.vcf','').replace('.gz','')
 
+logger.info(f'Loading phenotype from {phenofile}...')
+pheno = pd.read_csv(rf'{phenofile}',sep='\t') # 第一列是样本ID, 第一行是表型名
+pheno = pheno.groupby(pheno.columns[0]).mean() # 重复样本表型取均值
+pheno.index = pheno.index.astype(str)
+if pheno.shape[1]==0:
+    print(pheno.head())
+    raise ValueError('No phenotype data found, please check the phenotype file format!')
 if args.vcf:
     logger.info(f'Loading genotype from {gfile}...')
     geno = vcfreader(rf'{gfile}') # VCF format
@@ -205,10 +212,6 @@ elif args.bfile:
     geno = geno.iloc[:,2:].T
 geno.index = geno.index.astype(str)
 famid = geno.index
-logger.info(f'Loading phenotype from {phenofile}...')
-pheno = pd.read_csv(rf'{phenofile}',sep='\t') # 第一列是样本ID, 第一行是表型名
-pheno = pheno.groupby(pheno.columns[0]).mean() # 重复样本表型取均值
-pheno.index = pheno.index.astype(str)
 logger.info('Geno and Pheno are ready!')
 
 if qcal or kcal:
