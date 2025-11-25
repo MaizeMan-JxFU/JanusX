@@ -25,6 +25,7 @@ Citation:
 '''
 
 from ast import arg
+from matplotlib.pyplot import plot
 from pyBLUP import QK,GWAS
 from _gfreader import breader,vcfreader
 import pandas as pd
@@ -111,8 +112,10 @@ def main(log:bool=True):
                                    '(default: %(default)s)')
     optional_group.add_argument('-t','--thread', type=int, default=-1,
                                help='Number of CPU threads to use (-1 for all available cores, default: %(default)s)')
-    optional_group.add_argument('--fast', action='store_true', default=False,
+    optional_group.add_argument('-fast','--fast', action='store_true', default=False,
                                help='Enable fast mode for GWAS (default: %(default)s)')
+    optional_group.add_argument('-plot','--plot', action='store_true', default=False,
+                               help='Enable plot mode for GWAS result (default: %(default)s)')
     args = parser.parse_args()
     # Determine genotype file
     if args.vcf:
@@ -131,7 +134,8 @@ def main(log:bool=True):
         args.grm,
         args.qcov,
         args.cov,
-        str(args.fast)
+        str(args.fast),
+        str(args.plot),
     ]
     # create log file
     if not os.path.exists(args.out):
@@ -153,6 +157,7 @@ def main(log:bool=True):
         logger.info(f"Covariant matrix: {args.cov}")
         logger.info(f"Threads:          {args.thread} ({'All cores' if args.thread == -1 else 'User specified'})")
         logger.info(f"FAST mode:        {args.fast}")
+        logger.info(f"Plot mode:        {args.plot}")
         logger.info("*"*60 + "\n")
     
     # Create output directory if it doesn't exist
@@ -169,6 +174,7 @@ kinship_method = args.grm
 qdim = args.qcov
 cov = args.cov
 FASTmode = args.fast
+plotmode = args.plot
 threads = args.thread
 kcal = True if kinship_method in ['VanRanden', 'gemma1', 'gemma2', 'pearson'] else False
 qcal = True if qdim in np.arange(1,20).astype(str) else False
@@ -269,6 +275,36 @@ for i in pheno.columns:
         results_save = format_dataframe_for_export(results, scientific_cols=['p'], float_cols=['beta','se','af'])
         results_save.to_csv(f'{outfolder}/{i}.assoc.tsv',sep='\t',index=False)
         logger.info(f'Saved in {outfolder}/{i}.assoc.tsv'.replace('//','/'))
+        if plotmode:
+            import matplotlib.pyplot as plt
+            from bioplotkit import GWASPLOT
+            import matplotlib as mpl
+            logging.getLogger('fontTools.subset').setLevel(logging.ERROR)
+            logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+            mpl.use('Agg')
+            mpl.rcParams['pdf.fonttype'] = 42
+            mpl.rcParams['ps.fonttype'] = 42
+            # Manhattan Plot
+            plotmodel = GWASPLOT(results)
+            fig = plt.figure(figsize=(5,4))
+            ax1 = fig.add_subplot(111)
+            ax1.hist(p,bins=20)
+            ax1.set_xlabel(f'Distribution of {i}')
+            ax1.set_ylabel('Frequency')
+            plt.tight_layout()
+            plt.savefig(f'{outfolder}/{i}.assoc.hist.pdf',transparent=True)
+            fig = plt.figure(figsize=(8,4))
+            ax2 = fig.add_subplot(111)
+            plotmodel.manhattan(-np.log10(1e-6), ax=ax2)
+            plt.tight_layout()
+            plt.savefig(f'{outfolder}/{i}.assoc.manh.pdf',transparent=True)
+            fig = plt.figure(figsize=(5,4))
+            ax3 = fig.add_subplot(111)
+            plotmodel.qq(ax=ax3)
+            plt.tight_layout()
+            plt.savefig(f'{outfolder}/{i}.assoc.qq.pdf',transparent=True)
+            logger.info(f'Saved in {outfolder}/{i}.assoc.*.pdf'.replace('//','/'))
+            plt.close('all')
         del results,results_save,gwasmodel,p,famid_pheno,famid_geno
     else:
         logger.info(f'Phenotype {i} has no overlapping samples with genotype, please check sample id. skipped.\n')
