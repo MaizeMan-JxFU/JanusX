@@ -60,30 +60,30 @@ def main(log:bool=True):
                                help='File of gwas results')
     # Optional arguments
     optional_group = parser.add_argument_group('Optional Arguments')
-    optional_group.add_argument('--chr', type=str, default='#CHROM',
+    optional_group.add_argument('-chr', '--chr', type=str, default='#CHROM',
                                help='Column name of chr'
                                    '(default: %(default)s)')
-    optional_group.add_argument('--pos', type=str, default='POS',
+    optional_group.add_argument('-pos','--pos', type=str, default='POS',
                                help='Column name of position'
                                    '(default: %(default)s)')
-    optional_group.add_argument('--pvalue', type=str, default='p',
+    optional_group.add_argument('-pvalue','--pvalue', type=str, default='p',
                                help='Column name of pvalue'
                                    '(default: %(default)s)')
-    optional_group.add_argument('--threshold', type=float, default=None,
+    optional_group.add_argument('-threshold','--threshold', type=float, default=None,
                                help='treshold of pvalue'
                                    '(default: %(default)s)')
-    optional_group.add_argument('--noplot', action='store_false', default=True,
+    optional_group.add_argument('-noplot','--noplot', action='store_false', default=True,
                                help='disabling plot manhanden figure (default: %(default)s)')
-    optional_group.add_argument('--anno', type=str, default=None,
+    optional_group.add_argument('-a','--anno', type=str, default=None,
                                help='annotation option, .gff file or .bed file'
                                    '(default: %(default)s)')
-    optional_group.add_argument('--annobroaden', type=float, default=None,
+    optional_group.add_argument('-ab','--annobroaden', type=float, default=None,
                                help='broaden range of chromosome (Kb)'
                                    '(default: %(default)s)')
-    optional_group.add_argument('--descItem', type=str, default='description',
+    optional_group.add_argument('-descItem','--descItem', type=str, default='description',
                                help='description items in gff file (hidden option)'
                                    '(default: %(default)s)')
-    optional_group.add_argument('--out', type=str, default=None,
+    optional_group.add_argument('-o', '--out', type=str, default=None,
                                help='Output prefix path'
                                    '(default: %(default)s)')
     args = parser.parse_args()
