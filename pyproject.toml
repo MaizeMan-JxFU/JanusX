@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = "==3.12.*"
 dependencies = [
-    "pyblup @ git+https://gh-proxy.com/https://github.com/MaizeMan-JxFU/pyBLUP",
+    "pyblup==1.1.0",
     "bioplotkit==1.0.2",
     "bed-reader==1.0.6"
 ]
