@@ -397,10 +397,10 @@ gtools [模块名] [模块命令](后续增加 coloc、gs 等模块)
 ```bash
 gtools gwas -h # 查看帮助
 # 混合线性模型
-gtools gwas --vcf example/mouse_hs1940.vcf.gz --pheno example/mouse_hs1940.pheno --out test # vcf format
-gtools gwas --npy example/mouse_hs1940 --pheno example/mouse_hs1940.pheno --out test # numpy format
+gtools gwas -vcf example/mouse_hs1940.vcf.gz -p example/mouse_hs1940.pheno -o test # vcf format
+gtools gwas -npy example/mouse_hs1940 -p example/mouse_hs1940.pheno -o test # numpy format
 # 可视化
-gtools gwasplot --file test/test0.assoc.tsv
+gtools postGWAS -file test/test0.assoc.tsv -threshold 1e-6
 ```
 
 使用example文件夹下的[测试数据](https://doi.org/10.1038/ng.3609)输出结果如下所示：
