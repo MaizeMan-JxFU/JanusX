@@ -135,8 +135,10 @@ class GWAS:
             snp_chunk = self.Dh@snp[i:i_end].T
             if snp_chunk.shape[1]>0:
                 results = np.array(Parallel(n_jobs=threads)(delayed(process_col)(i) for i in range(snp_chunk.shape[1])))
-                beta_se_p.append(np.concatenate([results[:,:-1],2*norm.sf(np.abs(results[:,0]/results[:,1])).reshape(-1,1)],axis=1))
-                lbds.extend(results[:,-1])
+                if results.shape[1] == 3:
+                    lbds.extend(results[:,-1])
+                    results = results[:,:-1]
+                beta_se_p.append(np.concatenate([results,2*norm.sf(np.abs(results[:,0]/results[:,1])).reshape(-1,1)],axis=1))
             if self.log:
                 pbar.update(i_end-i)
                 if i % 10 == 0:

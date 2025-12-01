@@ -4,7 +4,7 @@ import psutil
 import typing
 process = psutil.Process()
 class QK:
-    def __init__(self,M:np.ndarray,chunksize:int=100_000,Mcopy:bool=False,log:bool=False):
+    def __init__(self,M:np.ndarray,chunksize:int=100_000,Mcopy:bool=False,log:bool=False,maff:float=0.02,missf:float=0.05):
         '''
         Calculation of Q and K matrix with low memory and high speed
         
@@ -22,12 +22,12 @@ class QK:
         maftmark = maf>.5
         maf[maftmark] = 1 - maf[maftmark]
         M[maftmark] = 2 - M[maftmark]
-        SNPretain = (miss/M.shape[1]<=0.05) & (maf>=0.02)
+        SNPretain = (miss/M.shape[1]<=missf) & (maf>=maff)
         M = M[SNPretain]
         maf = maf[SNPretain]
         maftmark = maftmark[SNPretain]
         maf = maf.astype('float32')
-        
+        self.missrate = miss[SNPretain]/M.shape[1]
         self.SNPretain = SNPretain
         self.maftmark = maftmark
         self.maf = maf.reshape(-1,1)

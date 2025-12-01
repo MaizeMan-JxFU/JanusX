@@ -270,7 +270,7 @@ for i in pheno.columns:
         results = pd.DataFrame(results,columns=['beta','se','p'],index=ref_alt.index)
         results = pd.concat([ref_alt,results],axis=1)
         results = results.reset_index()
-        results_save = format_dataframe_for_export(results, scientific_cols=['p'], float_cols=['beta','se','af'])
+        results_save = format_dataframe_for_export(results, scientific_cols=['p'], float_cols=['beta','se','maf'])
         results_save.to_csv(f'{outfolder}/{i}.assoc.tsv',sep='\t',index=False)
         logger.info(f'Saved in {outfolder}/{i}.assoc.tsv'.replace('//','/'))
         del results,results_save,gwasmodel,p
