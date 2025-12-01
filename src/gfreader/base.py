@@ -64,7 +64,7 @@ def breader(prefix:str,ref_adjust:str=None) -> pd.DataFrame:
         genotype.columns = ['REF','ALT']+genotype.columns[2:].to_list()
     return genotype
 
-def vcfreader(vcfPath:str,chunksize=50_000,ref_adjust:str=None) -> pd.DataFrame:
+def vcfreader(vcfPath:str,chunksize=50_000,ref_adjust:str=None,vcftype:str=None) -> pd.DataFrame:
     '''ref_adjust: 基于基因组矫正, 需提供参考基因组路径'''
     from itertools import takewhile,repeat
     buffer = 8*1024*1024
@@ -89,7 +89,7 @@ def vcfreader(vcfPath:str,chunksize=50_000,ref_adjust:str=None) -> pd.DataFrame:
             sum_snp = sum(buf.count('\n') for buf in buf_gen)
     ncol = [0,1,3,4]+list(range(col.index('FORMAT')+1,len(col)))
     col = [col[i] for i in ncol]
-    dtype_config = dict(zip(ncol,['category','int32']+['category']*(len(col)-2)))
+    dtype_config = dict(zip(ncol,['str','int32']+['category']*(len(col)-2)))
     vcf_chunks = pd.read_csv(vcfPath,sep=r'\s+',comment='#',header=None,usecols=ncol,low_memory=False,compression=compression,chunksize=chunksize,dtype=dtype_config)
     genotype = []
     ref_alt = []
@@ -102,21 +102,26 @@ def vcfreader(vcfPath:str,chunksize=50_000,ref_adjust:str=None) -> pd.DataFrame:
         all_time_info = f'''{round(100*iter_ratio,2)}% (time cost: {round(time_cost/60,2)}/{round(time_left/60,2)} mins)'''
         cpu,mem = get_process_info()
         print(f'\rCPU: {cpu}%, Memory: {round(mem,2)} G, Process: {all_time_info}',end='')
+        vcf_chunk[0] = vcf_chunk[0].str.upper().str.replace('CHR0','').str.replace('CHR','')
+        vcf_chunk = vcf_chunk.loc[vcf_chunk[0].isin(np.arange(1,30).astype(str))]
+        vcf_chunk[0] = vcf_chunk[0].astype('int8')
         vcf_chunk:pd.DataFrame = vcf_chunk.set_index([0,1])
         ref_alt.append(vcf_chunk.iloc[:,:2])
         def transG(col:pd.Series):
             vcf_transdict = {'0/0':0,'1/1':2,'0/1':1,'1/0':1,'./.':-9, # Non-phased genotype
                             '0|0':0,'1|1':2,'0|1':1,'1|0':1,'.|.':-9} # Phased genotype
             return col.map(vcf_transdict).astype('int8').fillna(-9)
-        vcf_chunk = vcf_chunk.iloc[:,2:].apply(transG,axis=0)
+        if not vcftype:
+            vcf_chunk = vcf_chunk.iloc[:,2:].apply(transG,axis=0)
+        else:
+            if vcftype == 'ivcf':
+                vcf_chunk = vcf_chunk.iloc[:,2:].astype('int8')
+            elif vcftype == 'fvcf':
+                vcf_chunk = vcf_chunk.iloc[:,2:].astype('float32')
         genotype.append(vcf_chunk)
     print()
     genotype:pd.DataFrame = pd.concat(genotype,axis=0)
     ref_alt:pd.DataFrame = pd.concat(ref_alt,axis=0)
-    maf = genotype.replace(-9,pd.NA).mean(axis=1)/2
-    transbool = maf>0.5
-    ref_alt.loc[transbool,:] = ref_alt.loc[transbool,::-1].values
-    genotype.loc[transbool,:] = 2 - genotype.loc[transbool,:].values
     genotype = pd.concat([ref_alt,genotype],axis=1) # minor allele as ALT
     genotype.columns = col[2:]
     genotype.index = genotype.index.rename(['#CHROM','POS'])

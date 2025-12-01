@@ -24,7 +24,6 @@ Citation:
   https://github.com/MaizeMan-JxFU/pyBLUP/
 '''
 
-from random import sample
 from gfreader import breader,vcfreader,npyreader,genotype2npy,genotype2vcf
 from pyBLUP import QK
 import pandas as pd
@@ -88,6 +87,10 @@ def main(log:bool=True):
     geno_group = required_group.add_mutually_exclusive_group(required=True)
     geno_group.add_argument('-vcf','--vcf', type=str, 
                            help='Input genotype file in VCF format (.vcf or .vcf.gz)')
+    geno_group.add_argument('-ivcf','--ivcf', type=str, 
+                           help='Input genotype file in VCF format with number, such as 0,1,2 (.vcf or .vcf.gz)')
+    geno_group.add_argument('-fvcf','--fvcf', type=str, 
+                           help='Input genotype file in VCF format with number, such as 0.1,12.3,2e6 (.vcf or .vcf.gz)')
     geno_group.add_argument('-bfile','--bfile', type=str, 
                            help='Input genotype files in PLINK binary format (prefix for .bed, .bim, .fam)')
     geno_group.add_argument('-npy','--npy', type=str, 
@@ -117,6 +120,12 @@ def main(log:bool=True):
     # Determine genotype file
     if args.vcf:
         gfile = args.vcf
+        args.prefix = os.path.basename(gfile).replace('.gz','').replace('.vcf','') if args.prefix is None else args.prefix
+    if args.ivcf:
+        gfile = args.ivcf
+        args.prefix = os.path.basename(gfile).replace('.gz','').replace('.vcf','') if args.prefix is None else args.prefix
+    if args.fvcf:
+        gfile = args.fvcf
         args.prefix = os.path.basename(gfile).replace('.gz','').replace('.vcf','') if args.prefix is None else args.prefix
     elif args.bfile:
         gfile = args.bfile
@@ -163,6 +172,12 @@ t_loading = time.time()
 if args.vcf:
     logger.info(f'Loading genotype from {gfile}...')
     geno = vcfreader(rf'{gfile}') # VCF format
+if args.ivcf:
+    logger.info(f'Loading genotype from {gfile}...')
+    geno = vcfreader(rf'{gfile}',vcftype='ivcf') # VCF format
+if args.fvcf:
+    logger.info(f'Loading genotype from {gfile}...')
+    geno = vcfreader(rf'{gfile}',vcftype='fvcf') # VCF format
 elif args.bfile:
     logger.info(f'Loading genotype from {gfile}.bed...')
     geno = breader(rf'{gfile}') # PLINK format
@@ -174,17 +189,18 @@ logger.info(f'Completed, cost: {round(time.time()-t_loading,3)} secs')
 m,n = geno.shape
 n = n - 2
 logger.info(f'Loaded SNP: {m}, individual: {n}')
-if args.maf>0 or args.geno<1:
-    qkmodel = QK(geno.iloc[:,2:].values,maff=args.maf,missf=args.geno)
-    samples = geno.columns[2:]
-    ref_alt:pd.DataFrame = geno.iloc[:,:2]
-    ref_alt = ref_alt.loc[qkmodel.SNPretain]
-    ref_alt.iloc[qkmodel.maftmark,[0,1]] = ref_alt.iloc[qkmodel.maftmark,[1,0]]
-    geno = pd.concat([ref_alt,pd.DataFrame(qkmodel.M,index=ref_alt.index,columns=samples)],axis=1)
-    m,n = geno.shape
-    n = n - 2
-    logger.info(f'After filtering, SNP: {m}, individual: {n}, mean of maf: {np.mean(qkmodel.maf):.3f}, mean of miss: {np.mean(qkmodel.missrate):.3f}')
-    del qkmodel
+if not args.ivcf and not args.fvcf:
+    if args.maf>0 or args.geno<1:
+        qkmodel = QK(geno.iloc[:,2:].values,maff=args.maf,missf=args.geno)
+        samples = geno.columns[2:]
+        ref_alt:pd.DataFrame = geno.iloc[:,:2]
+        ref_alt = ref_alt.loc[qkmodel.SNPretain]
+        ref_alt.iloc[qkmodel.maftmark,[0,1]] = ref_alt.iloc[qkmodel.maftmark,[1,0]]
+        geno = pd.concat([ref_alt,pd.DataFrame(qkmodel.M,index=ref_alt.index,columns=samples)],axis=1)
+        m,n = geno.shape
+        n = n - 2
+        logger.info(f'After filtering, SNP: {m}, individual: {n}, mean of maf: {np.mean(qkmodel.maf):.3f}, mean of miss: {np.mean(qkmodel.missrate):.3f}')
+        del qkmodel
 logger.info(f'Genotype is transformed to {args.recode} format...')
 if args.recode == 'npy':
     genotype2npy(geno,f'{args.out}/{args.prefix}')
