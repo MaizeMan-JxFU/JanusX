@@ -26,6 +26,14 @@ import logging
 import sys
 import os
 import matplotlib as mpl
+color_set = {
+    0:['black','grey'],
+    1:['green','orange'],
+    2:['#C69287','#E4CD87'],
+    3:['#E4391B','#F9992A'],
+    4:["#3E4F94","#3E90BF"],
+    5:['#714F91','#E4391B','#F9992A','#9C5E27','#739CCD','#398249'],
+}
 def setup_logging(log_file_path):
     """set logging"""
     if os.path.exists(log_file_path) and log_file_path[-4:]=='.log':
@@ -74,6 +82,8 @@ def main(log:bool=True):
                                    '(default: %(default)s)')
     optional_group.add_argument('-noplot','--noplot', action='store_false', default=True,
                                help='disabling plot manhanden figure (default: %(default)s)')
+    optional_group.add_argument('-color','--color', type=int, default=0,
+                               help='Color style for manhanden and qq figure, 0-5 (default: %(default)s)')
     optional_group.add_argument('-a','--anno', type=str, default=None,
                                help='annotation option, .gff file or .bed file'
                                    '(default: %(default)s)')
@@ -81,21 +91,26 @@ def main(log:bool=True):
                                help='broaden range of chromosome (Kb)'
                                    '(default: %(default)s)')
     optional_group.add_argument('-descItem','--descItem', type=str, default='description',
-                               help='description items in gff file (hidden option)'
+                               help='description items in gff file (dev)'
                                    '(default: %(default)s)')
     optional_group.add_argument('-o', '--out', type=str, default=None,
-                               help='Output prefix path'
+                               help='Output folder path'
+                                   '(default: %(default)s)')
+    optional_group.add_argument('-prefix','--prefix', type=str,
+                               default=None,
+                               help='prefix of output file'
                                    '(default: %(default)s)')
     args = parser.parse_args()
+    assert args.color <= 5, 'colorset error: try 0-5'
+    args.color = color_set[args.color]
+    args.out = os.path.dirname(args.file) if args.out is None else args.out
+    args.prefix = os.path.basename(args.file).replace('.tsv','').replace('.txt','') if args.prefix is None else args.prefix
     # create log file
-    args.out = '.'.join(args.file.split('.')[:-1]) if args.out is None else args.out
-    folder = os.path.dirname(args.out)
-    folder = '.' if folder == '' else folder
     # Create output directory if it doesn't exist
-    if not os.path.exists(folder):
-        os.makedirs(folder, mode=0o755)
-    logger = setup_logging(f'''{args.out}.gwasplot.log'''.replace('//','/'))
-    logger.info('Simple script of GWAS visualization')
+    if not os.path.exists(args.out):
+        os.makedirs(args.out, mode=0o755)
+    logger = setup_logging(f'''{args.out}/{args.prefix}.gwasplot.log'''.replace('//','/'))
+    logger.info('Simple script of GWAS post analysis')
     logger.info(f'Host: {socket.gethostname()}\n')
     # Build argument list for the original script
     sys.argv = [
@@ -105,26 +120,30 @@ def main(log:bool=True):
         args.pos,
         args.pvalue,
         args.threshold,
-        args.out,
+        args.color,
         args.anno,
         args.annobroaden,
         args.descItem,
-        str(args.noplot)
+        str(args.noplot),
+        args.out,
+        args.prefix,
     ]
     # Print configuration summary
     if log:
-        logger.info("*"*60)
-        logger.info("GWAS plot script")
-        logger.info("*"*60)
-        logger.info(f"file:          {args.file}")
-        logger.info(f"chr:           {args.chr}")
-        logger.info(f"pos:           {args.pos}")
-        logger.info(f"pvalue:        {args.pvalue}")
-        logger.info(f"threshold:     {args.threshold}")
-        logger.info(f"plot mode:     {args.noplot}")
-        logger.info(f"output prefix: {args.out}")
-        logger.info(f"annotation:    {args.anno}")
-        logger.info(f"annobroad(kb): {args.annobroaden}")
+        if args.noplot:
+            logger.info("*"*60)
+            logger.info("GWAS Visulazation:")
+            logger.info(f"file:          {args.file}")
+            logger.info(f"chr:           {args.chr}")
+            logger.info(f"pos:           {args.pos}")
+            logger.info(f"pvalue:        {args.pvalue}")
+            logger.info(f"threshold:     {args.threshold if args.threshold else '0.05/nSNP'}")
+            logger.info(f"color:         {args.color}")
+        if args.anno:
+            logger.info("GWAS Annotation:")
+            logger.info(f"annotation:    {args.anno}")
+            logger.info(f"annobroad(kb): {args.annobroaden}")
+            logger.info(f"output prefix: {args.out}/{args.prefix}")
         logger.info("*"*60 + "\n")
     return args,logger
 
@@ -140,32 +159,40 @@ chr_string,pos_string,pvalue_string = args.chr,args.pos,args.pvalue
 df = pd.read_csv(file,sep='\t',usecols=[chr_string,pos_string,pvalue_string])
 threshold = args.threshold if args.threshold is not None else 0.05/df.shape[0]
 if args.noplot:
-    fig = plt.figure(figsize=(10,4),dpi=300)
-    ax =fig.add_subplot(121,)
-    ax2 =fig.add_subplot(122,)
+    t_plot = time.time()
     logger.info('* Visualizing...')
     plotmodel = GWASPLOT(df,chr_string,pos_string,pvalue_string,0.1)
-    plotmodel.manhattan(-np.log10(threshold),ax=ax)
-    plotmodel.qq(ax=ax2)
+    fig = plt.figure(figsize=(8,4),dpi=300)
+    ax =fig.add_subplot(111,)
+    plotmodel.manhattan(-np.log10(threshold),ax=ax,color_set=args.color)
     plt.tight_layout()
-    plt.savefig(f'{args.out}.pdf',transparent=True)
+    plt.savefig(f'{args.out}/{args.prefix}.manh.pdf',transparent=True)
     plt.close()
-    logger.info(f'Saved in {args.out}.pdf')
-if args.anno is not None:
+    fig = plt.figure(figsize=(5,4),dpi=300)
+    ax2 =fig.add_subplot(111,)
+    plotmodel.qq(ax=ax2,color_set=args.color)
+    plt.tight_layout()
+    plt.savefig(f'{args.out}/{args.prefix}.qq.pdf',transparent=True)
+    plt.close()
+    logger.info(f'Saved in {args.out}/{args.prefix}.manh.pdf and {args.out}/{args.prefix}.qq.pdf')
+    logger.info(f'Completed, costed {round(time.time()-t_plot,2)} secs\n')
+if args.anno:
+    logger.info('* Annotating...')
     if os.path.exists(args.anno):
+        t_anno = time.time()
         df_filter = df.loc[df[pvalue_string]<=threshold,[chr_string,pos_string,pvalue_string]].set_index([chr_string,pos_string])
-        logger.info('* Annotating...')
         anno = readanno(args.anno,args.descItem) # After treating: anno 0-chr,1-start,2-end,3-geneID,4-description1,5-description2
         desc = list(map(lambda x:anno.loc[(anno[0]==x[0])&(anno[1]<=x[1])&(anno[2]>=x[1])], df_filter.index))
         df_filter['desc'] = list(map(lambda x:f'''{x.iloc[0,3]};{x.iloc[0,4]};{x.iloc[0,5]}''' if not x.empty else 'NA;NA;NA', desc))
-        if args.annobroaden is not None:
+        if args.annobroaden:
             desc = list(map(lambda x:anno.loc[(anno[0]==x[0])&(anno[1]<=x[1]+args.annobroaden*1_000)&(anno[2]>=x[1]-args.annobroaden*1_000)], df_filter.index))
             df_filter['broaden'] = list(map(lambda x:f'''{'|'.join(x.iloc[:,3])};{'|'.join(x.iloc[:,4])};{'|'.join(x.iloc[:,5])}''' if not x.empty else 'NA;NA;NA', desc))
         logger.info(df_filter)
-        df_filter.to_csv(f'{args.out}.{threshold}.anno.tsv',sep='\t')
-        logger.info(f'Saved in {args.out}.{threshold}.anno.tsv')
+        df_filter.to_csv(f'{args.out}/{args.prefix}.{threshold}.anno.tsv',sep='\t')
+        logger.info(f'Saved in {args.out}/{args.prefix}.{threshold}.anno.tsv')
+        logger.info(f'Completed, costed {round(time.time()-t_anno,2)} secs\n')
     else:
-        logger.info(f'{args.anno} is an unkwown file')
+        logger.info(f'{args.out}/{args.prefix} is an unkwown file\n')
 lt = time.localtime()
 endinfo = f'\nFinished, Total time: {round(time.time()-t_start,2)} secs\n{lt.tm_year}-{lt.tm_mon}-{lt.tm_mday} {lt.tm_hour}:{lt.tm_min}:{lt.tm_sec}'
 logger.info(endinfo)

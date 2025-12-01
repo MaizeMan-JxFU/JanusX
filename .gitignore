@@ -10,7 +10,7 @@ wheels/
 .venv
 
 # test folder
-test/
+test*
 
 gtools.*
 
