@@ -10,6 +10,7 @@ dependencies = [
     "scipy",
     "matplotlib",
     "adjustText", # For pcshow.py
+    "plotly", # For pcshow.py
     "psutil",
     "tqdm",
     "joblib>=1.5.2",

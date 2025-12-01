@@ -1,27 +1,14 @@
 # -*- coding: utf-8 -*-
 '''
 Examples:
-  # Basic usage with VCF file
-  --vcf genotypes.vcf --pheno phenotypes.txt --out results
+  # Basic usage with tranfering vcf file to npy file
+  -vcf genotypes.vcf -recode npy -o results
   
-  # Using PLINK binary files with custom parameters
-  --bfile genotypes --pheno phenotypes.txt --out results --grm 1 --qcov 3 --thread 8
-  
-  # Using external kinship matrix and enabling fast mode
-  --vcf genotypes.vcf --pheno phenotypes.txt --out results --grm kinship_matrix.txt --qcov 10 --fast
-  
-  # Maximum performance with all threads
-  --bfile genotypes --pheno phenotypes.txt --out results --grm 1 --qcov 3 --cov covfile.txt --thread -1
-
-File Formats:
-  VCF/BFILE:    Standard VCF or PLINK binary format (bed/bim/fam)
-  PHENO:        Tab-delimited file with sample IDs in first column and phenotypes in subsequent columns
-  GRM File:     Space/tab-delimited kinship matrix file
-  QCOV File:    Space/tab-delimited covariate matrix file
-  COV File:    Space/tab-delimited covariate matrix file
+  # Usage with tranfering plink file to vcf file and filtering SNP with maf<0.02 and snpmiss>0.05
+  -bfile genotypes -recode vcf -o results -maf 0.02 -geno 0.05
         
 Citation:
-  https://github.com/MaizeMan-JxFU/pyBLUP/
+  https://github.com/MaizeMan-JxFU/gtools/
 '''
 
 from gfreader import breader,vcfreader,npyreader,genotype2npy,genotype2vcf
@@ -35,25 +22,6 @@ import logging
 import sys
 import os
 
-def format_dataframe_for_export(df:pd.DataFrame, scientific_cols=None, float_cols=None):
-    """
-    Parameters:
-    - df: raw DataFrame
-    - scientific_cols: 科学计数法列
-    - float_cols: 浮点数列
-    """
-    df_export = df.copy()
-    # 科学计数法
-    if scientific_cols:
-        for col in scientific_cols:
-            if col in df_export.columns and df_export[col].dtype in [np.float64, np.int64]:
-                df_export[col] = df_export[col].apply(lambda x: f"{x:.4e}")
-    # 浮点数
-    if float_cols:
-        for col in float_cols:
-            if col in df_export.columns and df_export[col].dtype in [np.float64, np.int64]:
-                df_export[col] = df_export[col].apply(lambda x: f"{x:.4f}")
-    return df_export
 def setup_logging(log_file_path):
     """set logging"""
     if os.path.exists(log_file_path) and log_file_path[-4:]=='.log':
@@ -88,9 +56,9 @@ def main(log:bool=True):
     geno_group.add_argument('-vcf','--vcf', type=str, 
                            help='Input genotype file in VCF format (.vcf or .vcf.gz)')
     geno_group.add_argument('-ivcf','--ivcf', type=str, 
-                           help='Input genotype file in VCF format with number, such as 0,1,2 (.vcf or .vcf.gz)')
+                           help='Input genotype file in VCF format with int number, such as 0,1,2 (.vcf or .vcf.gz)')
     geno_group.add_argument('-fvcf','--fvcf', type=str, 
-                           help='Input genotype file in VCF format with number, such as 0.1,12.3,2e6 (.vcf or .vcf.gz)')
+                           help='Input genotype file in VCF format with float number, such as 0.1,12.3,2e6 (.vcf or .vcf.gz)')
     geno_group.add_argument('-bfile','--bfile', type=str, 
                            help='Input genotype files in PLINK binary format (prefix for .bed, .bim, .fam)')
     geno_group.add_argument('-npy','--npy', type=str, 
@@ -148,7 +116,7 @@ def main(log:bool=True):
     # create log file
     if not os.path.exists(args.out):
         os.mkdir(args.out,0o755)
-    logger = setup_logging(f'''{args.out}/{args.prefix}.log'''.replace('\\','/').replace('//','/'))
+    logger = setup_logging(f'''{args.out}/{args.prefix}.gformat.log'''.replace('\\','/').replace('//','/'))
     logger.info('Genotype Format Transformer')
     logger.info(f'Host: {socket.gethostname()}\n')
     mafmiss = f'maf{args.maf}.miss{args.geno}'

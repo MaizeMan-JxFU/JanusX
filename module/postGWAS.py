@@ -2,17 +2,14 @@
 '''
 Examples:
   # Basic usage with gwasplot
-  --file result.assoc.txt
+  -f result.assoc.txt
   # Usage of different column names with gwasplot
-  --file result.assoc.txt --chr "chr" --pos "pos" --pvalue "P_wald"
+  -f result.assoc.txt -chr "chr" -pos "pos" -pvalue "P_wald"
   # Usage of gwasplot and point out output path
-  --file result.assoc.txt --chr "chr" --pos "pos" --pvalue "P_wald" --out test # it will saved in test.pdf
-
-File Formats:
-  file:    result.assoc.txt (txt with tab as delimiter)
+  -f result.assoc.txt -chr "chr" -pos "pos" -pvalue "P_wald" --out test # it will saved in test/result.assoc.qq.pdf and test/result.assoc.manh.pdf
         
 Citation:
-  https://github.com/MaizeMan-JxFU/gwasplot/
+  https://github.com/MaizeMan-JxFU/gtools/
 '''
 from _readanno import readanno
 from bioplotkit import GWASPLOT
@@ -109,7 +106,7 @@ def main(log:bool=True):
     # Create output directory if it doesn't exist
     if not os.path.exists(args.out):
         os.makedirs(args.out, mode=0o755)
-    logger = setup_logging(f'''{args.out}/{args.prefix}.gwasplot.log'''.replace('//','/'))
+    logger = setup_logging(f'''{args.out}/{args.prefix}.postGWAS.log'''.replace('//','/'))
     logger.info('Simple script of GWAS post analysis')
     logger.info(f'Host: {socket.gethostname()}\n')
     # Build argument list for the original script

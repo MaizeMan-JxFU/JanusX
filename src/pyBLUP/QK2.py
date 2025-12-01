@@ -4,14 +4,13 @@ import psutil
 import typing
 process = psutil.Process()
 class QK:
-    def __init__(self,M:np.ndarray,chunksize:int=100_000,Mcopy:bool=False,log:bool=False,maff:float=0.02,missf:float=0.05):
+    def __init__(self,M:np.ndarray,chunksize:int=100_000,Mcopy:bool=False,maff:float=0.02,missf:float=0.05):
         '''
         Calculation of Q and K matrix with low memory and high speed
         
         :param M: marker matrix with n samples multiply m snp (0,1,2 int8)
         :param chunksize: int (default: 500_000)
         '''
-        self.log = log
         M = M.copy() if Mcopy else M
         NAmark = M<0
         miss = np.sum(NAmark,axis=1) # Missing number of idv
@@ -52,11 +51,10 @@ class QK:
                 grm+=block_i.T@block_i/Mvar_sum
             elif method == 2:
                 grm+=Mvar_r[i:i_end]/m*block_i.T@block_i
-            if self.log:
-                pbar.update(i_end-i)
-                if i % 10 == 0:
-                    memory_usage = process.memory_info().rss / 1024**3
-                    pbar.set_postfix(memory=f'{memory_usage:.2f} GB')
+            pbar.update(i_end-i)
+            if i % 10 == 0:
+                memory_usage = process.memory_info().rss / 1024**3
+                pbar.set_postfix(memory=f'{memory_usage:.2f} GB')
         return (grm+grm.T)/2
     def PCA(self):
         '''
@@ -75,11 +73,10 @@ class QK:
             i_end = min(i + self.chunksize, m)
             block_i = (self.M[i:i_end]-self.Mmean[i:i_end])/Mstd[i:i_end]
             MTM += block_i.T @ block_i
-            if self.log:
-                pbar.update(i_end-i)
-                if i % 10 == 0:
-                    memory_usage = process.memory_info().rss / 1024**3
-                    pbar.set_postfix(memory=f'{memory_usage:.2f} GB')
+            pbar.update(i_end-i)
+            if i % 10 == 0:
+                memory_usage = process.memory_info().rss / 1024**3
+                pbar.set_postfix(memory=f'{memory_usage:.2f} GB')
         MTM = (MTM + MTM.T)/2
         eigval,eigvec = np.linalg.eigh(MTM/m)
         idx = np.argsort(eigval)[::-1]

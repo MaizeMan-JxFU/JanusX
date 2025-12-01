@@ -21,7 +21,7 @@ File Formats:
   COV File:    Space/tab-delimited covariate matrix file
         
 Citation:
-  https://github.com/MaizeMan-JxFU/pyBLUP/
+  https://github.com/MaizeMan-JxFU/gtools/
 '''
 
 from pyBLUP import GWAS
@@ -96,9 +96,6 @@ def main(log:bool=True):
                                help='Phenotype file (tab-delimited with sample IDs in first column)')
     # Optional arguments
     optional_group = parser.add_argument_group('Optional Arguments')
-    optional_group.add_argument('-o', '--out', type=str, default='test',
-                               help='Output directory for results'
-                                   '(default: %(default)s)')
     optional_group.add_argument('-k','--grm', type=int,
                                default=1,
                                help='Kinship matrix calculation method or path to pre-calculated GRM file '
@@ -113,6 +110,9 @@ def main(log:bool=True):
                                help='Number of CPU threads to use (-1 for all available cores, default: %(default)s)')
     optional_group.add_argument('-fast','--fast', action='store_true', default=False,
                                help='Enable fast mode for GWAS (default: %(default)s)')
+    optional_group.add_argument('-o', '--out', type=str, default='test',
+                               help='Output directory for results'
+                                   '(default: %(default)s)')
     args = parser.parse_args()
     # Determine genotype file
     if args.vcf:

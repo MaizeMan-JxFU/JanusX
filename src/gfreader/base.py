@@ -53,9 +53,9 @@ def breader(prefix:str,ref_adjust:str=None) -> pd.DataFrame:
         genotype = bed.read(dtype='int8')
     fam = pd.read_csv(f'{prefix}.fam',sep=r'\s+',header=None)
     bim = pd.read_csv(f'{prefix}.bim',sep=r'\s+',header=None)
-    genotype = pd.DataFrame(genotype,index=fam[0],).T
+    genotype = pd.DataFrame(genotype,index=fam[1],).T
     genotype = pd.concat([bim[[0,3,4,5]],genotype],axis=1)
-    genotype.columns = ['#CHROM','POS','A0','A1']+fam[0].to_list()
+    genotype.columns = ['#CHROM','POS','A0','A1']+fam[1].to_list()
     genotype = genotype.set_index(['#CHROM','POS'])
     if ref_adjust is not None:
         adjust_m = GENOMETOOL(ref_adjust)
