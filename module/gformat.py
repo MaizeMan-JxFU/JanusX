@@ -1,16 +1,4 @@
 # -*- coding: utf-8 -*-
-'''
-Examples:
-  # Basic usage with tranfering vcf file to npy file
-  -vcf genotypes.vcf -recode npy -o results
-  
-  # Usage with tranfering plink file to vcf file and filtering SNP with maf<0.02 and snpmiss>0.05
-  -bfile genotypes -recode vcf -o results -maf 0.02 -geno 0.05
-        
-Citation:
-  https://github.com/MaizeMan-JxFU/gtools/
-'''
-
 from gfreader import breader,vcfreader,npyreader,genotype2npy,genotype2vcf
 from pyBLUP import QK
 import pandas as pd
@@ -18,33 +6,10 @@ import numpy as np
 import argparse
 import time
 import socket
-import logging
+from _log import setup_logging
 import sys
 import os
 
-def setup_logging(log_file_path):
-    """set logging"""
-    if os.path.exists(log_file_path) and log_file_path[-4:]=='.log':
-        os.remove(log_file_path)
-    # creart logger
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    # clean exist handler
-    logger.handlers.clear()
-    # set log format
-    formatter = logging.Formatter()
-    # file handler
-    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(formatter)
-    # handler of control panel
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-    # add handler to logger
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    return logger
 def main(log:bool=True):
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -103,16 +68,6 @@ def main(log:bool=True):
         args.prefix = os.path.basename(gfile).replace('.npz','') if args.prefix is None else args.prefix
     gfile = gfile.replace('\\','/')
     args.out = os.path.dirname(gfile) if args.out is None else args.out
-    # Build argument list for the original script
-    sys.argv = [
-        sys.argv[0],  # script name
-        gfile,
-        args.recode,
-        args.maf,
-        args.geno,
-        args.out,
-        args.prefix,
-    ]
     # create log file
     if not os.path.exists(args.out):
         os.mkdir(args.out,0o755)

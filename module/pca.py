@@ -1,16 +1,4 @@
 # -*- coding: utf-8 -*-
-'''
-Examples:
-  # Basic usage with tranfering vcf file to npy file
-  -vcf genotypes.vcf -recode npy -o results
-  
-  # Usage with tranfering plink file to vcf file and filtering SNP with maf<0.02 and snpmiss>0.05
-  -bfile genotypes -recode vcf -o results -maf 0.02 -geno 0.05
-        
-Citation:
-  https://github.com/MaizeMan-JxFU/gtools/
-'''
-
 from gfreader import breader,vcfreader,npyreader
 from pyBLUP import QK
 import pandas as pd

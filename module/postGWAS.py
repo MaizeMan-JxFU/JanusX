@@ -19,35 +19,12 @@ import numpy as np
 import argparse
 import time
 import socket
-import logging
 import sys
 import os
 import matplotlib as mpl
 from bioplotkit.sci_set import color_set
+from _log import setup_logging,logging
 
-def setup_logging(log_file_path):
-    """set logging"""
-    if os.path.exists(log_file_path) and log_file_path[-4:]=='.log':
-        os.remove(log_file_path)
-    # creart logger
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    # clean exist handler
-    logger.handlers.clear()
-    # set log format
-    formatter = logging.Formatter()
-    # file handler
-    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(formatter)
-    # handler of control panel
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-    # add handler to logger
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    return logger
 def main(log:bool=True):
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -92,7 +69,7 @@ def main(log:bool=True):
                                help='prefix of output file'
                                    '(default: %(default)s)')
     args = parser.parse_args()
-    assert args.color <= 5, 'colorset error: try 0-5'
+    assert args.color <= 6, 'colorset error: try 0-6'
     args.color = color_set[args.color]
     args.out = os.path.dirname(args.file) if args.out is None else args.out
     args.prefix = os.path.basename(args.file).replace('.tsv','').replace('.txt','') if args.prefix is None else args.prefix
@@ -103,22 +80,6 @@ def main(log:bool=True):
     logger = setup_logging(f'''{args.out}/{args.prefix}.postGWAS.log'''.replace('//','/'))
     logger.info('Simple script of GWAS post analysis')
     logger.info(f'Host: {socket.gethostname()}\n')
-    # Build argument list for the original script
-    sys.argv = [
-        sys.argv[0],  # script name
-        args.file,
-        args.chr,
-        args.pos,
-        args.pvalue,
-        args.threshold,
-        args.color,
-        args.anno,
-        args.annobroaden,
-        args.descItem,
-        str(args.noplot),
-        args.out,
-        args.prefix,
-    ]
     # Print configuration summary
     if log:
         if args.noplot:

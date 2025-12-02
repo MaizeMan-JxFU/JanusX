@@ -32,9 +32,9 @@ import numpy as np
 import argparse
 import time
 import socket
-import logging
 import sys
 import os
+from _log import setup_logging
 
 def format_dataframe_for_export(df:pd.DataFrame, scientific_cols=None, float_cols=None):
     """
@@ -55,29 +55,6 @@ def format_dataframe_for_export(df:pd.DataFrame, scientific_cols=None, float_col
             if col in df_export.columns and df_export[col].dtype in [np.float64, np.int64]:
                 df_export[col] = df_export[col].apply(lambda x: f"{x:.4f}")
     return df_export
-def setup_logging(log_file_path):
-    """set logging"""
-    if os.path.exists(log_file_path) and log_file_path[-4:]=='.log':
-        os.remove(log_file_path)
-    # creart logger
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    # clean exist handler
-    logger.handlers.clear()
-    # set log format
-    formatter = logging.Formatter()
-    # file handler
-    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
-    file_handler.setLevel(logging.INFO)
-    file_handler.setFormatter(formatter)
-    # handler of control panel
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(formatter)
-    # add handler to logger
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    return logger
 def main(log:bool=True):
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -96,8 +73,8 @@ def main(log:bool=True):
                                help='Phenotype file (tab-delimited with sample IDs in first column)')
     # Optional arguments
     optional_group = parser.add_argument_group('Optional Arguments')
-    optional_group.add_argument('-k','--grm', type=int,
-                               default=1,
+    optional_group.add_argument('-k','--grm', type=str,
+                               default='1',
                                help='Kinship matrix calculation method or path to pre-calculated GRM file '
                                    '(default: %(default)s)')
     optional_group.add_argument('-q','--qcov', type=str, default='3',
@@ -121,17 +98,6 @@ def main(log:bool=True):
         gfile = args.bfile
     elif args.npy:
         gfile = args.npy
-    # Build argument list for the original script
-    sys.argv = [
-        sys.argv[0],  # script name
-        gfile,
-        args.pheno,
-        args.out,
-        args.grm,
-        args.qcov,
-        args.cov,
-        str(args.fast),
-    ]
     # create log file
     if not os.path.exists(args.out):
         os.mkdir(args.out,0o755)
@@ -169,8 +135,8 @@ qdim = args.qcov
 cov = args.cov
 FASTmode = args.fast
 threads = args.thread
-kcal = True if kinship_method in [1,2] else False
-qcal = True if qdim in np.arange(1,20).astype(str) else False
+kcal = True if kinship_method in ['1','2'] else False
+qcal = True if qdim in np.arange(1,30).astype(str) else False
 
 # test exist of all input files
 assert os.path.isfile(phenofile), f"can not find file: {phenofile}"
@@ -209,7 +175,7 @@ geno = geno.iloc[:,2:].to_numpy(copy=False)
 logger.info('Geno and Pheno are ready!')
 
 # GRM & PCA
-qkmodel = QK(geno,log=True)
+qkmodel = QK(geno)
 geno = qkmodel.M
 ref_alt = ref_alt.loc[qkmodel.SNPretain]
 ref_alt.iloc[qkmodel.maftmark,[0,1]] = ref_alt.iloc[qkmodel.maftmark,[1,0]]
@@ -222,7 +188,7 @@ if qcal or kcal:
         kmatrix = np.genfromtxt(f'{prefix}.k.{kinship_method}.txt')
     else:    
         logger.info(f'* Calculation method of kinship matrix is {kinship_method}')
-        kmatrix = qkmodel.GRM(method=kinship_method)
+        kmatrix = qkmodel.GRM(method=int(kinship_method))
         np.savetxt(f'{prefix}.k.{kinship_method}.txt',kmatrix,fmt='%.6f')
 
     if os.path.exists(f'{prefix}.q.{qdim}.txt'):
@@ -245,7 +211,7 @@ else:
     
     if not kcal and os.path.exists(kinship_method):
         logger.info(f'* Loading GRM from {kinship_method}...')
-        kmatrix = np.genfromtxt(kinship_method)
+        kmatrix = np.genfromtxt(kinship_method) if kinship_method[-4:] != '.npz' else np.load(kinship_method,)['arr_0']
 if cov is not None:
     cov = np.genfromtxt(cov,).reshape(-1,1)
     logger.info(f'Covmatrix {cov.shape}:')

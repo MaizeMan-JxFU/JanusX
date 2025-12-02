@@ -18,5 +18,5 @@ if [ -f "$MODULE_DIR/$MODULE.py" ];then
     shift
     $VENV_PYLAUCH -u $MODULE_DIR/$MODULE.py $@
 else
-    echo "Unkwown module: $MODULE;" "Installed modules:" $(ls $MODULE_DIR | grep -v "_")
+    echo "Unkwown module: $MODULE;" "Installed modules:" $(ls $MODULE_DIR | grep -v "_" | sed 's/.py//')
 fi
