@@ -21,6 +21,7 @@ import socket
 import logging
 import sys
 import os
+from bioplotkit.sci_set import color_set
 
 def setup_logging(log_file_path):
     """set logging"""
@@ -81,6 +82,8 @@ def main(log:bool=True):
     optional_group.add_argument('-group','--group', type=str, default=None,
                                help='Group file with 2 columns included samples and groups and without header'
                                    '(default: %(default)s)')
+    optional_group.add_argument('-color','--color', type=int, default=1,
+                               help='Color style for manhanden and qq figure, 0-6 (default: %(default)s)')
     args = parser.parse_args()
     # Determine genotype file
     if args.vcf:
@@ -97,6 +100,7 @@ def main(log:bool=True):
         args.prefix = os.path.basename(gfile) if args.prefix is None else args.prefix
     gfile = gfile.replace('\\','/')
     args.out = os.path.dirname(gfile) if args.out is None else args.out
+    args.color = color_set[args.color]
     # Build argument list for the original script
     sys.argv = [
         sys.argv[0],  # script name
@@ -105,6 +109,7 @@ def main(log:bool=True):
         args.plot,
         args.plot3D,
         args.group,
+        args.color,
         args.out,
         args.prefix,
     ]
@@ -129,6 +134,7 @@ def main(log:bool=True):
             logger.info(f"3DVisulaztion: {args.plot3D}")
         if args.group:
             logger.info(f"Group file: {args.group}")
+            logger.info(f"Colors set: {args.color}")
         logger.info(f"Output prefix: {args.out}/{args.prefix}")
         logger.info("*"*60 + "\n")
     return gfile,args,logger
@@ -177,38 +183,33 @@ if args.plot or args.plot3D:
         logger.info('* Visualizing...')
         exp = 100*eigenval/np.sum(eigenval)
         df_pc = pd.DataFrame(eigenvec[:,:3],index=samples,columns=[f'''PC{i+1}({round(float(exp[i]),2)}%)''' for i in range(3)])
-        pcshow = PCSHOW(df_pc,)
+        if args.group:
+            df_pc = pd.concat([df_pc,pd.read_csv(args.group,sep='\t',index_col=0,)],axis=1)
+            group = df_pc.columns[3]
+            textanno = df_pc.columns[4]
+        else:
+            group,textanno = None,None
+        pcshow = PCSHOW(df_pc)
         fig = plt.figure(figsize=(10,4),dpi=300)
         ax1 = fig.add_subplot(121);ax1.set_xlabel(f'{df_pc.columns[0]}');ax1.set_ylabel(f'{df_pc.columns[1]}')
         ax2 = fig.add_subplot(122);ax2.set_xlabel(f'{df_pc.columns[0]}');ax2.set_ylabel(f'{df_pc.columns[2]}')
-        if args.group:
-            anno =  pd.read_csv(args.group,sep='\t',index_col=0,)
-            pcshow.pcplot(df_pc.columns[0],df_pc.columns[1],anno=anno,group=anno.columns[0],ax=ax1)
-            pcshow.text_anno(df_pc.columns[0],df_pc.columns[1],anno,anno_tag=anno.columns[1],ax=ax1) if anno.shape[1]>1 else None
-            pcshow.pcplot(df_pc.columns[0],df_pc.columns[2],anno=anno,group=anno.columns[0],ax=ax2)
-            pcshow.text_anno(df_pc.columns[0],df_pc.columns[2],anno,anno_tag=anno.columns[1],ax=ax2) if anno.shape[1]>1 else None
-        else:
-            pcshow.pcplot(df_pc.columns[0],df_pc.columns[1],ax=ax1)
-            pcshow.pcplot(df_pc.columns[0],df_pc.columns[2],ax=ax2)
+        pcshow.pcplot(df_pc.columns[0],df_pc.columns[1],group=group,ax=ax1,color_set=args.color,anno_tag=textanno)
+        pcshow.pcplot(df_pc.columns[0],df_pc.columns[2],group=group,ax=ax2,color_set=args.color,anno_tag=textanno)
         plt.tight_layout()
         plt.savefig(f'{args.out}/{args.prefix}.eigenvec.2D.pdf',transparent=True)
         logger.info(f'2D figure was saved in {args.out}/{args.prefix}.eigenvec.2D.pdf')
         plt.close()
     if args.plot3D:
-        import plotly.express as px
-        import plotly.offline as pyo
-        color_set = ['#E4391B','#398249','#F9992A','#714F91','#9C5E27','#739CCD','black']
+        df_pc = pd.DataFrame(eigenvec[:,:3],index=samples,columns=[f'''PC{i+1}({round(float(exp[i]),2)}%)''' for i in range(3)])
         if args.group:
-            anno =  pd.concat([df_pc,pd.read_csv(args.group,sep='\t',index_col=0,).iloc[:,0].fillna('others')],axis=1).dropna()
-            group = anno.iloc[:,-1].unique()
-            colormap = dict(zip(group,color_set[:len(group)]))
-            anno['color'] = anno.iloc[:,-1].map(colormap)
-            fig = px.scatter_3d(anno.reset_index(),df_pc.columns[0],df_pc.columns[1],df_pc.columns[2],anno.columns[-2])
+            df_pc = pd.concat([df_pc,pd.read_csv(args.group,sep='\t',index_col=0,)],axis=1)
+            group = df_pc.columns[3]
+            pcshow = PCSHOW(df_pc)
+            fig = pcshow.pcplot3D(df_pc.columns[0],df_pc.columns[1],df_pc.columns[2],group,textanno,color_set[6])
         else:
-            fig = px.scatter_3d(df_pc,df_pc.columns[0],df_pc.columns[1],df_pc.columns[2],)
-        pyo.plot(fig,filename=f'{args.out}/{args.prefix}.eigenvec.3D.html')
-        logger.info(f'2D figure was saved in {args.out}/{args.prefix}.eigenvec.3D.html')
-        print()
+            fig = pcshow.pcplot3D(df_pc.columns[0],df_pc.columns[1],df_pc.columns[2])
+        fig.write_html(f'{args.out}/{args.prefix}.eigenvec.3D.html')
+        logger.info(f'3D figure was saved in {args.out}/{args.prefix}.eigenvec.3D.html')
 
 lt = time.localtime()
 endinfo = f'\nFinished, total time: {round(time.time()-t_start,2)} secs\n{lt.tm_year}-{lt.tm_mon}-{lt.tm_mday} {lt.tm_hour}:{lt.tm_min}:{lt.tm_sec}'

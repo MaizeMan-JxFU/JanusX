@@ -23,14 +23,8 @@ import logging
 import sys
 import os
 import matplotlib as mpl
-color_set = {
-    0:['black','grey'],
-    1:['green','orange'],
-    2:['#C69287','#E4CD87'],
-    3:['#E4391B','#F9992A'],
-    4:["#3E4F94","#3E90BF"],
-    5:['#714F91','#E4391B','#F9992A','#9C5E27','#739CCD','#398249'],
-}
+from bioplotkit.sci_set import color_set
+
 def setup_logging(log_file_path):
     """set logging"""
     if os.path.exists(log_file_path) and log_file_path[-4:]=='.log':
@@ -80,7 +74,7 @@ def main(log:bool=True):
     optional_group.add_argument('-noplot','--noplot', action='store_false', default=True,
                                help='disabling plot manhanden figure (default: %(default)s)')
     optional_group.add_argument('-color','--color', type=int, default=0,
-                               help='Color style for manhanden and qq figure, 0-5 (default: %(default)s)')
+                               help='Color style for manhanden and qq figure, 0-6 (default: %(default)s)')
     optional_group.add_argument('-a','--anno', type=str, default=None,
                                help='annotation option, .gff file or .bed file'
                                    '(default: %(default)s)')

@@ -9,7 +9,6 @@ dependencies = [
     "pandas",
     "scipy",
     "matplotlib",
-    "adjustText", # For pcshow.py
     "plotly", # For pcshow.py
     "psutil",
     "tqdm",
