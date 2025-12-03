@@ -76,7 +76,7 @@ def main(log:bool=True):
                                default='1',
                                help='Kinship matrix calculation method or path to pre-calculated GRM file '
                                    '(default: %(default)s)')
-    optional_group.add_argument('-q','--qcov', type=str, default='3',
+    optional_group.add_argument('-q','--qcov', type=str, default='0',
                                help='Number of principal components for Q matrix or path to covariate matrix file '
                                    '(default: %(default)s)')
     optional_group.add_argument('-c','--cov', type=str, default=None,
@@ -111,9 +111,11 @@ def main(log:bool=True):
         logger.info(f"Genotype file:    {gfile}")
         logger.info(f"Phenotype file:   {args.pheno}")
         logger.info(f"Output directory: {args.out}")
-        logger.info(f"GRM method:       {args.grm}")
-        logger.info(f"Q matrix:         {args.qcov}")
-        logger.info(f"Covariant matrix: {args.cov}")
+        logger.info(f"Genotype RMatrix: {args.grm}")
+        if args.qcov != '0':
+            logger.info(f"Q matrix:         {args.qcov}")
+        if args.cov:
+            logger.info(f"Covariant matrix: {args.cov}")
         logger.info(f"Threads:          {args.thread} ({'All cores' if args.thread == -1 else 'User specified'})")
         logger.info(f"FAST mode:        {args.fast}")
         logger.info("*"*60 + "\n")
@@ -129,20 +131,12 @@ FASTmode = args.fast
 threads = args.thread
 kcal = True if kinship_method in ['1','2'] else False
 qcal = True if qdim in np.arange(0,30).astype(str) else False
-
 # test exist of all input files
 assert os.path.isfile(phenofile), f"can not find file: {phenofile}"
-
-if not kcal:
-    assert os.path.isfile(kinship_method), f"{kinship_method} is not a GRM calculation method of kinship or a file"
-if not qcal:
-    assert os.path.isfile(qdim), f"{qdim} is not a dimension of q matrix or a file"
-if cov is not None:
-    assert os.path.isfile(cov), f"{cov} is not a file"
-
-if not os.path.exists(outfolder):
-    os.makedirs(outfolder,mode=0o755)
-prefix = gfile.replace('.vcf','').replace('.gz','')
+# test k and q matrix
+assert kcal or os.path.isfile(kinship_method), f'Error: {kinship_method} is not a calculation method or grm file'
+assert qcal or os.path.isfile(qdim), f'Error: {qdim} is not a dimension of PC or PC file'
+assert cov is None or os.path.isfile(cov), f"{cov} is applied, but it is not a file"
 
 # Loading genotype matrix
 logger.info(f'Loading phenotype from {phenofile}...')
@@ -172,9 +166,9 @@ geno = qkmodel.M
 ref_alt = ref_alt.loc[qkmodel.SNPretain]
 ref_alt.iloc[qkmodel.maftmark,[0,1]] = ref_alt.iloc[qkmodel.maftmark,[1,0]]
 ref_alt['maf'] = qkmodel.maf
-if qcal or kcal:
-    if not os.path.exists(f'{prefix}.k.{kinship_method}.txt') or not os.path.exists(f'{prefix}.q.{qdim}.txt') and int(qdim)!=0:
-        logger.info(f'Samples and SNP: {geno.shape}')
+
+prefix = gfile.replace('.vcf','').replace('.gz','')
+if kcal:
     if os.path.exists(f'{prefix}.k.{kinship_method}.txt'):
         logger.info(f'* Loading GRM from {prefix}.k.{kinship_method}.txt...')
         kmatrix = np.genfromtxt(f'{prefix}.k.{kinship_method}.txt')
@@ -182,29 +176,24 @@ if qcal or kcal:
         logger.info(f'* Calculation method of kinship matrix is {kinship_method}')
         kmatrix = qkmodel.GRM(method=int(kinship_method))
         np.savetxt(f'{prefix}.k.{kinship_method}.txt',kmatrix,fmt='%.6f')
-
+else:
+    logger.info(f'* Loading GRM from {kinship_method}...')
+    kmatrix = np.genfromtxt(kinship_method) if kinship_method[-4:] != '.npz' else np.load(kinship_method,)['arr_0']
+if qcal:
     if os.path.exists(f'{prefix}.q.{qdim}.txt'):
         logger.info(f'* Loading Q matrix from {prefix}.q.{qdim}.txt...')
         qmatrix = np.genfromtxt(f'{prefix}.q.{qdim}.txt')
-    else:
-        if int(qdim) > 0:
-            logger.info(f'* Dimension of PC for q matrix is {qdim}')
-            qmatrix,eigenval = qkmodel.PCA()
-            qmatrix = qmatrix[:,:int(qdim)]
-            np.savetxt(f'{prefix}.q.{qdim}.txt',qmatrix,fmt='%.6f')
-        else:
-            qmatrix = np.array([]).reshape(geno.shape[0],0)
-else:
-    if qdim == '0':
+    elif qdim=="0":
         qmatrix = np.array([]).reshape(geno.shape[0],0)
-    elif not qcal and os.path.exists(qdim):
-        logger.info(f'* Loading Q matrix from {qdim}...')
-        qmatrix = np.genfromtxt(qdim)
-    
-    if not kcal and os.path.exists(kinship_method):
-        logger.info(f'* Loading GRM from {kinship_method}...')
-        kmatrix = np.genfromtxt(kinship_method) if kinship_method[-4:] != '.npz' else np.load(kinship_method,)['arr_0']
-if cov is not None:
+    else:
+        logger.info(f'* Dimension of PC for q matrix is {qdim}')
+        qmatrix,eigenval = qkmodel.PCA()
+        qmatrix = qmatrix[:,:int(qdim)]
+        np.savetxt(f'{prefix}.q.{qdim}.txt',qmatrix,fmt='%.6f')       
+else:
+    logger.info(f'* Loading Q matrix from {qdim}...')
+    qmatrix = np.genfromtxt(qdim)
+if cov:
     cov = np.genfromtxt(cov,).reshape(-1,1)
     logger.info(f'Covmatrix {cov.shape}:')
     qmatrix = np.concatenate([qmatrix,cov],axis=1)
@@ -221,7 +210,8 @@ for i in pheno.columns:
     p = pheno[i].dropna()
     famidretain = np.isin(famid,p.index)
     if len(p)>0:
-        gwasmodel = GWAS(y=p.loc[famid[famidretain]].values.reshape(-1,1),X=qmatrix[famidretain],kinship=kmatrix[famidretain][:,famidretain])
+        qmatrix_sub = qmatrix[famidretain] if qmatrix.size>0 else None
+        gwasmodel = GWAS(y=p.loc[famid[famidretain]].values.reshape(-1,1),X=qmatrix_sub,kinship=kmatrix[famidretain][:,famidretain])
         logger.info(f'''Phenotype: {i}, Number of samples: {np.sum(famidretain)}, Number of SNP: {geno.shape[0]}, pve of null: {round(gwasmodel.pve,3)}, FAST mode: {FASTmode}''')
         results = gwasmodel.gwas(snp=geno[:,famidretain],chunksize=100_000,threads=threads,fast=FASTmode) # gwas running...
         logger.info(f'Effective number of SNP: {results.shape[0]}')
