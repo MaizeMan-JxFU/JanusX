@@ -128,7 +128,7 @@ cov = args.cov
 FASTmode = args.fast
 threads = args.thread
 kcal = True if kinship_method in ['1','2'] else False
-qcal = True if qdim in np.arange(1,30).astype(str) else False
+qcal = True if qdim in np.arange(0,30).astype(str) else False
 
 # test exist of all input files
 assert os.path.isfile(phenofile), f"can not find file: {phenofile}"
