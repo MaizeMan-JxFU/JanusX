@@ -20,7 +20,9 @@ class QK:
         # Filter
         maftmark = maf>.5
         maf[maftmark] = 1 - maf[maftmark]
-        M[maftmark] = 2 - M[maftmark]
+        print(M[maftmark,:5])
+        np.subtract(2, M, where=maftmark[:, None], out=M)
+        print(M[maftmark,:5])
         SNPretain = (miss/M.shape[1]<=missf) & (maf>=maff)
         M = M[SNPretain]
         maf = maf[SNPretain]
