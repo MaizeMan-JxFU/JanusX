@@ -7,10 +7,18 @@ import argparse
 import time
 import socket
 import logging
+logging.getLogger('fontTools.subset').setLevel(logging.ERROR)
+logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+mpl.use('Agg')
+mpl.rcParams['pdf.fonttype'] = 42
+mpl.rcParams['ps.fonttype'] = 42
 from _common.log import setup_logging
 import sys
 import os
 from bioplotkit.sci_set import color_set
+from bioplotkit import PCSHOW
 
 def main(log:bool=True):
     parser = argparse.ArgumentParser(
@@ -156,14 +164,6 @@ if __name__ == '__main__':
         logger.info(f'Loading PC result from {gfile}.eigenvec, {gfile}.eigenvec.id and {gfile}.eigenval...')
         eigenvec,samples,eigenval = np.genfromtxt(f'{gfile}.eigenvec'),np.genfromtxt(f'{gfile}.eigenvec.id',dtype=str),np.genfromtxt(f'{gfile}.eigenval')
     if args.plot or args.plot3D:
-        from bioplotkit import PCSHOW
-        import matplotlib.pyplot as plt
-        import matplotlib as mpl
-        mpl.use('Agg')
-        mpl.rcParams['pdf.fonttype'] = 42
-        mpl.rcParams['ps.fonttype'] = 42
-        logging.getLogger('fontTools.subset').setLevel(logging.ERROR)
-        logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
         if args.plot:
             logger.info('* Visualizing...')
             exp = 100*eigenval/np.sum(eigenval)

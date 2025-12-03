@@ -11,6 +11,13 @@ Examples:
 Citation:
   https://github.com/MaizeMan-JxFU/gtools/
 '''
+import matplotlib as mpl
+import logging
+mpl.use('Agg')
+mpl.rcParams['pdf.fonttype'] = 42
+mpl.rcParams['ps.fonttype'] = 42
+logging.getLogger('fontTools.subset').setLevel(logging.ERROR)
+logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 from bioplotkit import GWASPLOT
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -19,9 +26,8 @@ import argparse
 import time
 import socket
 import os
-import matplotlib as mpl
 from bioplotkit.sci_set import color_set
-from _common.log import setup_logging,logging
+from _common.log import setup_logging
 from _common.readanno import readanno
 
 def main():
@@ -97,11 +103,6 @@ def main():
     return args,logger
 
 t_start = time.time()
-mpl.use('Agg')
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype'] = 42
-logging.getLogger('fontTools.subset').setLevel(logging.ERROR)
-logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 args,logger = main()
 file = args.file
 chr_string,pos_string,pvalue_string = args.chr,args.pos,args.pvalue
