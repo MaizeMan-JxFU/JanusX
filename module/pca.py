@@ -141,9 +141,6 @@ if __name__ == '__main__':
         np.savetxt(f'{args.out}/{args.prefix}.eigenvec',eigenvec[:,:args.dim],fmt='%.6f')
         np.savetxt(f'{args.out}/{args.prefix}.eigenval',eigenval,fmt='%.2f')
         logger.info(f'Saved in folder "{args.out}" with files named {args.prefix}.eigenvec, {args.prefix}.eigenvec.id and {args.prefix}.eigenval')
-    elif args.pcfile:
-        logger.info(f'Loading PC result from {gfile}.eigenvec, {gfile}.eigenvec.id and {gfile}.eigenval...')
-        eigenvec,samples,eigenval = np.genfromtxt(f'{gfile}.eigenvec'),np.genfromtxt(f'{gfile}.eigenvec.id',dtype=str),np.genfromtxt(f'{gfile}.eigenval')
     elif args.grm:
         assert os.path.exists(f'{gfile}.grm.id'), f'GRM file is not existed'
         assert os.path.exists(f'{gfile}.grm.txt') or os.path.exists(f'{gfile}.grm.npz'), f'GRM file is not existed'
@@ -151,7 +148,13 @@ if __name__ == '__main__':
             logger.info(f'Loading GRM from {gfile}.grm.txt, {gfile}.grm.id...')
             eigenvec, eigenval = Eigendec(np.genfromtxt(f'{gfile}.grm.txt'))
             samples = np.genfromtxt(f'{gfile}.grm.id',dtype=str)
-        pass
+            np.savetxt(f'{args.out}/{args.prefix}.eigenvec.id',samples,fmt='%s')
+            np.savetxt(f'{args.out}/{args.prefix}.eigenvec',eigenvec[:,:args.dim],fmt='%.6f')
+            np.savetxt(f'{args.out}/{args.prefix}.eigenval',eigenval,fmt='%.2f')
+            logger.info(f'Saved in folder "{args.out}" with files named {args.prefix}.eigenvec, {args.prefix}.eigenvec.id and {args.prefix}.eigenval')
+    elif args.pcfile:
+        logger.info(f'Loading PC result from {gfile}.eigenvec, {gfile}.eigenvec.id and {gfile}.eigenval...')
+        eigenvec,samples,eigenval = np.genfromtxt(f'{gfile}.eigenvec'),np.genfromtxt(f'{gfile}.eigenvec.id',dtype=str),np.genfromtxt(f'{gfile}.eigenval')
     if args.plot or args.plot3D:
         from bioplotkit import PCSHOW
         import matplotlib.pyplot as plt
