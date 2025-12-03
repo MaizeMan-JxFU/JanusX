@@ -20,9 +20,7 @@ class QK:
         # Filter
         maftmark = maf>.5
         maf[maftmark] = 1 - maf[maftmark]
-        print(M[maftmark,:5])
         np.subtract(2, M, where=maftmark[:, None], out=M)
-        print(M[maftmark,:5])
         SNPretain = (miss/M.shape[1]<=missf) & (maf>=maff)
         M = M[SNPretain]
         maf = maf[SNPretain]
@@ -85,6 +83,13 @@ class QK:
         eigval = eigval[idx]
         eigvec = eigvec[:, idx]
         return eigvec,eigval
+
+def Eigendec(grm:np.ndarray):
+    eigval,eigvec = np.linalg.eigh(grm)
+    idx = np.argsort(eigval)[::-1]
+    eigval = eigval[idx]
+    eigvec = eigvec[:, idx]
+    return eigvec,eigval
 
 if __name__ == '__main__':
     from gfreader import breader

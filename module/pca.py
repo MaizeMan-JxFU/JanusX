@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from gfreader import breader,vcfreader,npyreader
-from pyBLUP import QK
+from pyBLUP import QK,Eigendec
 import pandas as pd
 import numpy as np
 import argparse
@@ -26,6 +26,8 @@ def main(log:bool=True):
                            help='Input genotype files in PLINK binary format (prefix for .bed, .bim, .fam)')
     geno_group.add_argument('-npy','--npy', type=str, 
                            help='Input genotype files in PLINK binary format (prefix for .npz, .snp, .idv)')
+    geno_group.add_argument('-grm','--grm', type=str, 
+                           help='GRM file for PC calculation (prefix for .grm.id and .grm.txt, or .grm.id and .grm.npz)')
     geno_group.add_argument('-pcfile','--pcfile', type=str, 
                            help='PCA result files only for visualization (prefix for .eigenval, .eigenvec, .eigenvec.id)')
     # Optional arguments
@@ -33,7 +35,7 @@ def main(log:bool=True):
     optional_group.add_argument('-o', '--out', type=str, default=None,
                                help='Output directory for results'
                                    '(default: %(default)s)')
-    optional_group.add_argument('-prefix','--prefix', type=str,default=None,
+    optional_group.add_argument('-prefix','--prefix',type=str,default=None,
                                help='prefix of output file'
                                    '(default: %(default)s)')
     optional_group.add_argument('-dim','--dim', type=int, default=3,
@@ -60,7 +62,10 @@ def main(log:bool=True):
         args.prefix = os.path.basename(gfile) if args.prefix is None else args.prefix
     elif args.npy:
         gfile = args.npy
-        args.prefix = os.path.basename(gfile).replace('.npz','') if args.prefix is None else args.prefix
+        args.prefix = os.path.basename(gfile) if args.prefix is None else args.prefix
+    elif args.grm:
+        gfile = args.grm
+        args.prefix = os.path.basename(gfile) if args.prefix is None else args.prefix
     elif args.pcfile:
         gfile = args.pcfile
         args.prefix = os.path.basename(gfile) if args.prefix is None else args.prefix
@@ -90,10 +95,12 @@ def main(log:bool=True):
         logger.info("*"*60)
         logger.info("GFT CONFIGURATION")
         logger.info("*"*60)
-        if not args.pcfile:
+        if args.npy or args.vcf or args.bfile:
             logger.info(f"Genotype file: {gfile}")
             logger.info(f"Out dimension: {args.dim}")
-        else:
+        elif args.grm:
+            logger.info(f"grm file prefix: {gfile}")
+        elif args.pcfile:
             logger.info(f"PC resultfile: {gfile}")
         if args.plot or args.plot3D:
             logger.info(f"2DVisulaztion: {args.plot}")
@@ -105,12 +112,11 @@ def main(log:bool=True):
         logger.info("*"*60 + "\n")
     return gfile,args,logger
 
-
 if __name__ == '__main__':
     t_start = time.time()
     gfile,args,logger = main()
     t_loading = time.time()
-    if not args.pcfile:
+    if args.npy or args.vcf or args.bfile:
         if args.vcf:
             logger.info(f'Loading genotype from {gfile}...')
             geno = vcfreader(rf'{gfile}') # VCF format
@@ -135,9 +141,17 @@ if __name__ == '__main__':
         np.savetxt(f'{args.out}/{args.prefix}.eigenvec',eigenvec[:,:args.dim],fmt='%.6f')
         np.savetxt(f'{args.out}/{args.prefix}.eigenval',eigenval,fmt='%.2f')
         logger.info(f'Saved in folder "{args.out}" with files named {args.prefix}.eigenvec, {args.prefix}.eigenvec.id and {args.prefix}.eigenval')
-    else:
-        logger.info(f'Loading genotype from {gfile}.eigenvec, {gfile}.eigenvec.id and {gfile}.eigenval...')
-        eigenvec,samples,eigenval = np.genfromtxt(f'{gfile}.eigenvec'),np.genfromtxt(f'{gfile}.eigenvec.id'),np.genfromtxt(f'{gfile}.eigenval')
+    elif args.pcfile:
+        logger.info(f'Loading PC result from {gfile}.eigenvec, {gfile}.eigenvec.id and {gfile}.eigenval...')
+        eigenvec,samples,eigenval = np.genfromtxt(f'{gfile}.eigenvec'),np.genfromtxt(f'{gfile}.eigenvec.id',dtype=str),np.genfromtxt(f'{gfile}.eigenval')
+    elif args.grm:
+        assert os.path.exists(f'{gfile}.grm.id'), f'GRM file is not existed'
+        assert os.path.exists(f'{gfile}.grm.txt') or os.path.exists(f'{gfile}.grm.npz'), f'GRM file is not existed'
+        if os.path.exists(f'{gfile}.grm.txt'):
+            logger.info(f'Loading GRM from {gfile}.grm.txt, {gfile}.grm.id...')
+            eigenvec, eigenval = Eigendec(np.genfromtxt(f'{gfile}.grm.txt'))
+            samples = np.genfromtxt(f'{gfile}.grm.id',dtype=str)
+        pass
     if args.plot or args.plot3D:
         from bioplotkit import PCSHOW
         import matplotlib.pyplot as plt
