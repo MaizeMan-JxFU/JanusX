@@ -52,13 +52,13 @@ def main(log:bool=True):
     # create log file
     if not os.path.exists(args.out):
         os.mkdir(args.out,0o755)
-    logger = setup_logging(f'''{args.out}/{args.prefix}.pca.log'''.replace('\\','/').replace('//','/'))
-    logger.info('Principle Component Analysis')
+    logger = setup_logging(f'''{args.out}/{args.prefix}.grm.log'''.replace('\\','/').replace('//','/'))
+    logger.info('Fast Calculation of Genetic Relationship Matrice')
     logger.info(f'Host: {socket.gethostname()}\n')
     # Print configuration summary
     if log:
         logger.info("*"*60)
-        logger.info("GFT CONFIGURATION")
+        logger.info("GRM CONFIGURATION")
         logger.info("*"*60)
         logger.info(f"Genotype file: {gfile}")
         logger.info(f"Method of GRM: {'Centralization' if args.method==1 else 'Standardization'}")

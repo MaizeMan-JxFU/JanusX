@@ -202,6 +202,13 @@ def vcfinfo():
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'''
     return vcf_info
 
+def genotypeMerge(geno:pd.DataFrame,genolist:list=[]):
+    chr_loc:pd.Index = geno.index
+    ref_alt = geno.iloc[:,:2]
+    for geno_merge in genolist:
+        print(geno_merge)
+    return geno
+
 def genotype2npy(geno: pd.DataFrame,outPrefix:str=None):
     '''geno: index-(chr,pos),columns-(ref,alt,sample1,sample2,...)'''
     geno.iloc[:,:2].to_csv(f'{outPrefix}.snp',header=None,sep='\t')

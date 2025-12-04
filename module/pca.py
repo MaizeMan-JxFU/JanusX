@@ -83,28 +83,16 @@ def main(log:bool=True):
     gfile = gfile.replace('\\','/')
     args.out = os.path.dirname(gfile) if args.out is None else args.out
     args.color = color_set[args.color]
-    # Build argument list for the original script
-    sys.argv = [
-        sys.argv[0],  # script name
-        gfile,
-        args.dim,
-        args.plot,
-        args.plot3D,
-        args.group,
-        args.color,
-        args.out,
-        args.prefix,
-    ]
     # create log file
     if not os.path.exists(args.out):
         os.mkdir(args.out,0o755)
     logger = setup_logging(f'''{args.out}/{args.prefix}.pca.log'''.replace('\\','/').replace('//','/'))
-    logger.info('Principle Component Analysis')
+    logger.info('Principle Component Analysis Module')
     logger.info(f'Host: {socket.gethostname()}\n')
     # Print configuration summary
     if log:
         logger.info("*"*60)
-        logger.info("GFT CONFIGURATION")
+        logger.info("PCA CONFIGURATION")
         logger.info("*"*60)
         if args.npy or args.vcf or args.bfile:
             logger.info(f"Genotype file: {gfile}")
@@ -163,41 +151,48 @@ if __name__ == '__main__':
             np.savetxt(f'{args.out}/{args.prefix}.eigenvec',eigenvec[:,:args.dim],fmt='%.6f')
             np.savetxt(f'{args.out}/{args.prefix}.eigenval',eigenval,fmt='%.2f')
             logger.info(f'Saved in folder "{args.out}" with files named {args.prefix}.eigenvec, {args.prefix}.eigenvec.id and {args.prefix}.eigenval')
+        elif os.path.exists(f'{gfile}.grm.npz'):
+            logger.info(f'Loading GRM from {gfile}.grm.npz, {gfile}.grm.id...')
+            eigenvec, eigenval = Eigendec(np.load(f'{gfile}.grm.npz')['arr_0'])
+            samples = np.genfromtxt(f'{gfile}.grm.id',dtype=str)
+            np.savetxt(f'{args.out}/{args.prefix}.eigenvec.id',samples,fmt='%s')
+            np.savetxt(f'{args.out}/{args.prefix}.eigenvec',eigenvec[:,:args.dim],fmt='%.6f')
+            np.savetxt(f'{args.out}/{args.prefix}.eigenval',eigenval,fmt='%.2f')
+            logger.info(f'Saved in folder "{args.out}" with files named {args.prefix}.eigenvec, {args.prefix}.eigenvec.id and {args.prefix}.eigenval')
     elif args.pcfile:
         logger.info(f'Loading PC result from {gfile}.eigenvec, {gfile}.eigenvec.id and {gfile}.eigenval...')
         eigenvec,samples,eigenval = np.genfromtxt(f'{gfile}.eigenvec'),np.genfromtxt(f'{gfile}.eigenvec.id',dtype=str),np.genfromtxt(f'{gfile}.eigenval')
-    if args.plot or args.plot3D:
-        if args.plot:
-            logger.info('* Visualizing...')
-            exp = 100*eigenval/np.sum(eigenval)
-            df_pc = pd.DataFrame(eigenvec[:,:3],index=samples,columns=[f'''PC{i+1}({round(float(exp[i]),2)}%)''' for i in range(3)])
-            if args.group:
-                df_pc = pd.concat([df_pc,pd.read_csv(args.group,sep='\t',index_col=0,)],axis=1)
-                group = df_pc.columns[3]
-                textanno = df_pc.columns[4]
-            else:
-                group,textanno = None,None
+    if args.plot:
+        logger.info('* Visualizing...')
+        exp = 100*eigenval/np.sum(eigenval)
+        df_pc = pd.DataFrame(eigenvec[:,:3],index=samples,columns=[f'''PC{i+1}({round(float(exp[i]),2)}%)''' for i in range(3)])
+        if args.group:
+            df_pc = pd.concat([df_pc,pd.read_csv(args.group,sep='\t',index_col=0,)],axis=1)
+            group = df_pc.columns[3]
+            textanno = df_pc.columns[4]
+        else:
+            group,textanno = None,None
+        pcshow = PCSHOW(df_pc)
+        fig = plt.figure(figsize=(10,4),dpi=300)
+        ax1 = fig.add_subplot(121);ax1.set_xlabel(f'{df_pc.columns[0]}');ax1.set_ylabel(f'{df_pc.columns[1]}')
+        ax2 = fig.add_subplot(122);ax2.set_xlabel(f'{df_pc.columns[0]}');ax2.set_ylabel(f'{df_pc.columns[2]}')
+        pcshow.pcplot(df_pc.columns[0],df_pc.columns[1],group=group,ax=ax1,color_set=args.color,anno_tag=textanno)
+        pcshow.pcplot(df_pc.columns[0],df_pc.columns[2],group=group,ax=ax2,color_set=args.color,anno_tag=textanno)
+        plt.tight_layout()
+        plt.savefig(f'{args.out}/{args.prefix}.eigenvec.2D.pdf',transparent=True)
+        logger.info(f'2D figure was saved in {args.out}/{args.prefix}.eigenvec.2D.pdf')
+        plt.close()
+    if args.plot3D:
+        df_pc = pd.DataFrame(eigenvec[:,:3],index=samples,columns=[f'''PC{i+1}({round(float(exp[i]),2)}%)''' for i in range(3)])
+        if args.group:
+            df_pc = pd.concat([df_pc,pd.read_csv(args.group,sep='\t',index_col=0,)],axis=1)
+            group = df_pc.columns[3]
             pcshow = PCSHOW(df_pc)
-            fig = plt.figure(figsize=(10,4),dpi=300)
-            ax1 = fig.add_subplot(121);ax1.set_xlabel(f'{df_pc.columns[0]}');ax1.set_ylabel(f'{df_pc.columns[1]}')
-            ax2 = fig.add_subplot(122);ax2.set_xlabel(f'{df_pc.columns[0]}');ax2.set_ylabel(f'{df_pc.columns[2]}')
-            pcshow.pcplot(df_pc.columns[0],df_pc.columns[1],group=group,ax=ax1,color_set=args.color,anno_tag=textanno)
-            pcshow.pcplot(df_pc.columns[0],df_pc.columns[2],group=group,ax=ax2,color_set=args.color,anno_tag=textanno)
-            plt.tight_layout()
-            plt.savefig(f'{args.out}/{args.prefix}.eigenvec.2D.pdf',transparent=True)
-            logger.info(f'2D figure was saved in {args.out}/{args.prefix}.eigenvec.2D.pdf')
-            plt.close()
-        if args.plot3D:
-            df_pc = pd.DataFrame(eigenvec[:,:3],index=samples,columns=[f'''PC{i+1}({round(float(exp[i]),2)}%)''' for i in range(3)])
-            if args.group:
-                df_pc = pd.concat([df_pc,pd.read_csv(args.group,sep='\t',index_col=0,)],axis=1)
-                group = df_pc.columns[3]
-                pcshow = PCSHOW(df_pc)
-                fig = pcshow.pcplot3D(df_pc.columns[0],df_pc.columns[1],df_pc.columns[2],group,textanno,color_set[6])
-            else:
-                fig = pcshow.pcplot3D(df_pc.columns[0],df_pc.columns[1],df_pc.columns[2])
-            fig.write_html(f'{args.out}/{args.prefix}.eigenvec.3D.html')
-            logger.info(f'3D figure was saved in {args.out}/{args.prefix}.eigenvec.3D.html')
+            fig = pcshow.pcplot3D(df_pc.columns[0],df_pc.columns[1],df_pc.columns[2],group,textanno,color_set[6])
+        else:
+            fig = pcshow.pcplot3D(df_pc.columns[0],df_pc.columns[1],df_pc.columns[2])
+        fig.write_html(f'{args.out}/{args.prefix}.eigenvec.3D.html')
+        logger.info(f'3D figure was saved in {args.out}/{args.prefix}.eigenvec.3D.html')
     lt = time.localtime()
     endinfo = f'\nFinished, total time: {round(time.time()-t_start,2)} secs\n{lt.tm_year}-{lt.tm_mon}-{lt.tm_mday} {lt.tm_hour}:{lt.tm_min}:{lt.tm_sec}'
     logger.info(endinfo)
