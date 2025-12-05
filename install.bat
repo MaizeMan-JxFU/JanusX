@@ -3,4 +3,4 @@ python -m pip install uv
 python -m uv venv --clear
 python -m uv cache clean
 python -m uv sync
-copy doc\windows.bat gtools.bat
+copy doc\windows.bat jx.bat

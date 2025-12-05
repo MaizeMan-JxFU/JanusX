@@ -11,15 +11,15 @@ RUN apt-get update --quiet \
     && apt-get autoremove -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-WORKDIR /app/gtools
+WORKDIR /app/JanusX
 COPY . .
-ENV PATH="/app/gtools:/app/miniconda/bin:$PATH"
+ENV PATH="/app/JanusX:/app/miniconda/bin:$PATH"
 
 ENV UV_PYTHON_INSTALL_MIRROR="https://gh-proxy.com/https://github.com/astral-sh/python-build-standalone/releases/download"
 
 RUN chmod +x ./install.sh; ./install.sh \
     && /app/miniconda/bin/conda clean -afy \
     && python -m uv cache clean && python -m pip cache purge \
-    && ./gtools gwas -h
+    && ./jx gwas -h
 
-ENTRYPOINT ["gtools"]
+ENTRYPOINT ["jx"]
