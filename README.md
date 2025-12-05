@@ -104,7 +104,7 @@ Each module corresponds to a CLI command. The launcher script (`jx.bat`/`jx`) di
 
 ## Python Version
 
-Requires Python3
+Requires Python 3.8+
 
 ## Test Data
 
