@@ -4,7 +4,9 @@ import psutil
 import typing
 process = psutil.Process()
 class QK:
-    def __init__(self,M:np.ndarray,chunksize:int=100_000,Mcopy:bool=False,maff:float=0.02,missf:float=0.05):
+    def __init__(self,M:np.ndarray,chunksize:int=100_000,
+                 Mcopy:bool=False,maff:float=0.02,missf:float=0.05,
+                 impute:typing.Literal['mean','mode']='mean'):
         '''
         Calculation of Q and K matrix with low memory and high speed
         
@@ -12,15 +14,18 @@ class QK:
         :param chunksize: int (default: 500_000)
         '''
         M = M.copy() if Mcopy else M
-        NAmark = M<0
-        M[NAmark] = 0 # Impute using mode
+        NAmark = M<0 # Mark miss as bool matrix
+        M[NAmark] = 0 # Miss -> 0
         miss = np.sum(NAmark,axis=1) # Missing number of idv
-        maf:np.ndarray = (np.sum(M,axis=1)+1)/(2*(M.shape[1]-miss)+2)
+        maf:np.ndarray = (np.sum(M,axis=1)+1)/(2*(M.shape[1]-miss)+2) # stat maf
         # Filter
         maftmark = maf>.5
         maf[maftmark] = 1 - maf[maftmark]
         np.subtract(2, M, where=maftmark[:, None], out=M)
-        M[NAmark] = 0 # Impute using mode
+        if impute == 'mode':
+            M[NAmark] = 0 # Impute using mode
+        elif impute == 'mean':
+            M[NAmark] = np.take(2*maf, np.where(NAmark)[0]) # Impute using mean
         del NAmark
         SNPretain = (miss/M.shape[1]<=missf) & (maf>=maff)
         M = M[SNPretain]
