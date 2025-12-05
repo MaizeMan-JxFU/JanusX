@@ -60,7 +60,7 @@ Test data in example is from [genetics-statistics/GEMMA](https://github.com/gene
 
 ### Core Libraries (src/)
 
-- **JanusX** - Core statistical engine
+- **pyBLUP** - Core statistical engine
   - `gwas.py` - GWAS class implementing mixed linear model with REML optimization
   - `QK.py` - Q matrix (population structure) and K matrix (kinship) calculation with memory-optimized chunking (deprecated)
   - `QK2.py` - Alternative QK implementation
