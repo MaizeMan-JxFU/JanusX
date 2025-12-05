@@ -6,7 +6,7 @@ process = psutil.Process()
 class QK:
     def __init__(self,M:np.ndarray,chunksize:int=100_000,
                  Mcopy:bool=False,maff:float=0.02,missf:float=0.05,
-                 impute:typing.Literal['mean','mode']='mean'):
+                 impute:typing.Literal['mean','mode']='mode'):
         '''
         Calculation of Q and K matrix with low memory and high speed
         
@@ -25,6 +25,7 @@ class QK:
         if impute == 'mode':
             M[NAmark] = 0 # Impute using mode
         elif impute == 'mean':
+            M = M.astype(np.float32) # Memory will be increased to 4 fold
             M[NAmark] = np.take(2*maf, np.where(NAmark)[0]) # Impute using mean
         del NAmark
         SNPretain = (miss/M.shape[1]<=missf) & (maf>=maff)
