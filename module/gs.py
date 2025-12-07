@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
-from tqdm import tqdm
+import typing
+from bioplotkit import gsplot
 for key in ['MPLBACKEND']:
     if key in os.environ:
         del os.environ[key]
@@ -15,6 +16,10 @@ from bioplotkit.sci_set import color_set
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+from scipy.stats import pearsonr,spearmanr
+from sklearn.svm import SVR
+from sklearn.ensemble import RandomForestRegressor,AdaBoostRegressor
+from sklearn.model_selection import GridSearchCV,RandomizedSearchCV
 import argparse
 import time
 import socket
@@ -22,6 +27,40 @@ from _common.log import setup_logging
 from gfreader import breader,vcfreader,npyreader
 from pyBLUP import QK,BLUP,kfold
 
+def GSapi(Y:np.ndarray,Xtrain:np.ndarray,Xtest:np.ndarray,method:typing.Literal['GBLUP','rrBLUP','RF','SVM'],PCAdec:bool=False):
+    if PCAdec:
+        Xtt = np.concatenate([Xtrain,Xtest],axis=1)
+        Xtt:np.ndarray = (Xtt-np.mean(Xtt,axis=1,keepdims=True))/(np.std(Xtt,axis=1,keepdims=True)+1e-8)
+        val,vec = np.linalg.eigh(Xtt.T@Xtt/Xtt.shape[0])
+        idx = np.argsort(val)[::-1]
+        val,vec = val[idx],vec[:, idx]
+        dim = np.sum(np.cumsum(val)/np.sum(val)>0.9)
+        vec = val[:dim]*vec[:,:dim]
+        Xtrain,Xtest = vec[:Xtrain.shape[1],:].T,vec[Xtrain.shape[1]:,:].T
+    if method == 'GBLUP':
+        model = BLUP(Y.reshape(-1,1),Xtrain,kinship=1)
+        return model.predict(Xtrain),model.predict(Xtest)
+    elif method == 'rrBLUP':
+        model = BLUP(Y.reshape(-1,1),Xtrain,kinship=None)
+        return model.predict(Xtrain),model.predict(Xtest)
+    elif method == 'RF':
+        param_grid = {
+            'n_estimators': [10,25,50,75],
+            'max_depth': [None, 1, 3, 5, 7, 10], # adjust overfit
+            # 'min_samples_split': [2, 5, 10],
+            # 'min_samples_leaf': [1, 2, 4, 8],
+        }
+        grid = GridSearchCV(RandomForestRegressor(), param_grid, cv=5, n_jobs=-1)
+        grid.fit(Xtrain.T, Y.flatten())
+        return grid.predict(Xtrain.T).reshape(-1,1),grid.predict(Xtest.T).reshape(-1,1)
+    elif method == 'SVM':
+        param_grid = {
+            'C': [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2],
+            'gamma': ['scale', 0.01, 0.1]
+        }
+        grid = GridSearchCV(SVR(), param_grid, cv=5, n_jobs=-1)
+        grid.fit(Xtrain.T, Y.flatten())
+        return grid.predict(Xtrain.T).reshape(-1,1),grid.predict(Xtest.T).reshape(-1,1)
 
 def main(log:bool=True):
     parser = argparse.ArgumentParser(
@@ -41,12 +80,30 @@ def main(log:bool=True):
     ## Phenotype file
     required_group.add_argument('-p','--pheno', type=str, required=True,
                                help='Phenotype file (tab-delimited with sample IDs in first column)')
+    # Model arguments
+    model_group = parser.add_argument_group('Model Arguments')
+    model_group.add_argument('-GBLUP','--GBLUP', action='store_true', default=False,
+                               help='Method of GBLUP to train and predict '
+                                   '(default: %(default)s)')
+    model_group.add_argument('-rrBLUP','--rrBLUP', action='store_true', default=False,
+                               help='Method of rrBLUP to train and predict '
+                                   '(default: %(default)s)')
+    model_group.add_argument('-RF','--RF', action='store_true', default=False,
+                               help='Method of random forest to train and predict '
+                                   '(default: %(default)s)')
+    model_group.add_argument('-SVM','--SVM', action='store_true', default=False,
+                               help='Method of support vector machine to train and predict '
+                                   '(default: %(default)s)')
+    model_group.add_argument('-pcd','--pcd', action='store_true', default=False,
+                               help='Decomposition of data by PCA '
+                                   '(default: %(default)s)')
     # Optional arguments
     optional_group = parser.add_argument_group('Optional Arguments')
     ## Point out phenotype or snp
     optional_group.add_argument('-n','--ncol', type=int, default=None,
                                help='Only analysis n columns in phenotype ranged from 0-n '
                                    '(default: %(default)s)')
+    ## Other optional arguments
     optional_group.add_argument('-plot','--plot', action='store_true', default=False,
                                help='Visualization of 5-fold cross-validation and different model tree '
                                    '(default: %(default)s)')
@@ -76,6 +133,7 @@ def main(log:bool=True):
     logger.info('Genomic Selection Module')
     logger.info(f'Host: {socket.gethostname()}\n')
     # Print configuration summary
+    num = 0
     if log:
         logger.info("*"*60)
         logger.info("GENOMIC SELECTION CONFIGURATION")
@@ -83,6 +141,19 @@ def main(log:bool=True):
         logger.info(f"Genotype file:   {gfile}")
         logger.info(f"Phenotype file:  {args.pheno}")
         logger.info(f"Analysis Pcol:   {args.ncol}") if args.ncol is not None else logger.info(f"Analysis Pcol:   All")
+        if args.GBLUP:
+            num += 1
+            logger.info(f"Used model{num}:     GBLUP")
+        if args.rrBLUP:
+            num += 1
+            logger.info(f"Used model{num}:     rrBLUP")
+        if args.RF:
+            num += 1
+            logger.info(f"Used model{num}:     Random Forest")
+        if args.SVM:
+            num += 1
+            logger.info(f"Used model{num}:     Support vecter machine")
+        logger.info(f"Decomposition:   {args.pcd}")
         if args.plot:
             logger.info(f"Plot mode:       {args.plot}")
         logger.info(f"Output prefix:   {args.out}/{args.prefix}")
@@ -101,6 +172,16 @@ if __name__ == '__main__':
     if args.ncol is not None: 
         assert args.ncol <= pheno.shape[1], "IndexError: Phenotype column index out of range."
         pheno = pheno.iloc[:,[args.ncol]]
+    methods = []
+    if args.GBLUP:
+        methods.append('GBLUP')
+    if args.rrBLUP:
+        methods.append('rrBLUP')
+    if args.SVM:
+        methods.append('SVM')
+    if args.RF:
+        methods.append('RF')
+    assert len(methods) > 0, 'No method exists'
     if args.vcf:
         logger.info(f'Loading genotype from {gfile}...')
         geno = vcfreader(rf'{gfile}') # VCF format
@@ -134,42 +215,32 @@ if __name__ == '__main__':
         TrainSNP = geno[:,trainmark]
         TrainP = p.loc[samples[trainmark]].values.reshape(-1,1)
         if TrainP.size > 0:
-            test4train,train4train = [],[]
-            mse_train,mse_test = [],[]
-            r2_train,r2_test = [],[]
-            for test,train in tqdm(kfold(TrainSNP.shape[1],k=5,seed=None),ncols=60):
-                model = BLUP(TrainP[train],TrainSNP[:,train],kinship=1)
-                ttest = np.concatenate([TrainP[test],model.predict(TrainSNP[:,test])],axis=1)
-                ttrain = np.concatenate([TrainP[train],model.predict(TrainSNP[:,train])],axis=1)
-                test4train.append(ttest);train4train.append(ttrain)
-                mse_train.append(np.sum((ttrain[:,0]-ttrain[:,1])**2)/ttrain.shape[0])
-                r2_train.append(1-np.sum((ttrain[:,0]-ttrain[:,1])**2)/np.sum((ttrain[:,0]-ttest[:,0].mean())**2))
-                mse_test.append(np.sum((ttest[:,0]-ttest[:,1])**2)/ttest.shape[0])
-                r2_test.append(1-np.sum((ttest[:,0]-ttest[:,1])**2)/np.sum((ttest[:,0]-ttest[:,0].mean())**2))
-            showidx = np.argmin(np.array(r2_train)-np.array(r2_test))
-            test4train = test4train[showidx]
-            train4train = train4train[showidx]
-            if args.plot:
-                fig = plt.figure(figsize=(5,4),dpi=300)
-                plt.plot([np.min(test4train),np.max(test4train)],[np.min(test4train),np.max(test4train)],linestyle='--',color=color_set[0][0],alpha=.8,label='y = x (Ideal)')
-                plt.scatter(train4train[:,0],train4train[:,1],color=color_set[0][1],alpha=.4,marker='+',label='Train data')
-                plt.scatter(test4train[:,0],test4train[:,1],color=color_set[0][0],alpha=.8,marker='*',label='Test data')
-                plt.xlabel('True Values')
-                plt.ylabel('Predicted Values')
-                plt.legend(loc='upper left')
-                plt.tight_layout()
-                plt.grid(True, alpha=0.3, axis='both')
-                plt.gca().text(0.96, 0.04, 
-                    f'Train MSE: {np.mean(mse_train):.2f}\nTest MSE: {np.mean(mse_test):.2f}\nTrain R2: {np.mean(r2_train):.2f}\nTest R2: {np.mean(r2_test):.2f}',
-                    transform=plt.gca().transAxes,
-                    ha='right', va='bottom',
-                    color='gray',alpha=.8,
-                    multialignment='left')
-                plt.savefig(f'{args.out}/{args.prefix}.{i}.gs.cv.pdf',transparent=True)
-            # Prediction for test population
-            TestSNP = geno[:,testmark]
-            model = BLUP(TrainP,TrainSNP,)
-            TestP = model.predict(TestSNP)
+            kfoldset = kfold(TrainSNP.shape[1],k=5,seed=None)
+            for ind,method in enumerate(methods):
+                print(f'Method{ind+1}: {method}')
+                test4train,train4train = [],[]
+                r2_train,r2_test = [],[]
+                num = 0
+                for test,train in kfoldset:
+                    t_fold = time.time()
+                    Pred_train,Pred_test = GSapi(TrainP[train],TrainSNP[:,train],TrainSNP[:,test],method=method,PCAdec=args.pcd)
+                    ttest = np.concatenate([TrainP[test],Pred_test],axis=1)
+                    ttrain = np.concatenate([TrainP[train],Pred_train],axis=1)
+                    test4train.append(ttest);train4train.append(ttrain)
+                    r2 = 1-np.sum((ttest[:,0]-ttest[:,1])**2)/np.sum((ttest[:,0]-ttest[:,0].mean())**2)
+                    r2_test.append(r2)
+                    num+=1
+                    logger.info(f'Fold{num}: {pearsonr(test4train[num-1][:,0],test4train[num-1][:,1]).statistic:.2f}(pearson), {spearmanr(test4train[num-1][:,0],test4train[num-1][:,1]).statistic:.2f}(spearman), {r2:.2f}(R2). Time costed: {(time.time()-t_fold):.2f} secs')
+                showidx = np.argmax(r2_test)
+                test4train = test4train[showidx]
+                train4train = train4train[showidx]
+                if args.plot:
+                    fig = plt.figure(figsize=(5,4),dpi=300)
+                    gsplot.scatterh(test4train,train4train,color_set=color_set[0],fig=fig)
+                    plt.savefig(f'{args.out}/{args.prefix}.{i}.gs.{method}.pdf',transparent=True)
+                # Prediction for test population
+                TestSNP = geno[:,testmark]
+                _TrainP,TestP = GSapi(TrainP,TrainSNP,TestSNP,method=method,PCAdec=args.pcd)
     lt = time.localtime()
     endinfo = f'\nFinished, total time: {round(time.time()-t_start,2)} secs\n{lt.tm_year}-{lt.tm_mon}-{lt.tm_mday} {lt.tm_hour}:{lt.tm_min}:{lt.tm_sec}'
     logger.info(endinfo)

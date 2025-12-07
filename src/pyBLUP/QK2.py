@@ -6,7 +6,8 @@ process = psutil.Process()
 class QK:
     def __init__(self,M:np.ndarray,chunksize:int=100_000,
                  Mcopy:bool=False,maff:float=0.02,missf:float=0.05,
-                 impute:typing.Literal['mean','mode']='mode',log:bool=True):
+                 impute:typing.Literal['mean','mode']='mode',check:bool=True,
+                 log:bool=True):
         '''
         Calculation of Q and K matrix with low memory and high speed
         
@@ -95,6 +96,25 @@ class QK:
         eigval = eigval[idx]
         eigvec = eigvec[:, idx]
         return eigvec,eigval
+
+def GRM(M:np.ndarray,log=False,chunksize=50_000):
+    m,n = M.shape
+    Mvar = np.var(M,axis=1).reshape(-1,1)
+    Mmean = np.mean(M,axis=1).reshape(-1,1)
+    Mvar_sum = np.sum(Mvar)
+    grm = np.zeros((n,n),dtype='float32')
+    if log:
+        pbar = tqdm(total=m, desc="Process of GRM",ascii=True)
+    for i in range(0,m,chunksize):
+        i_end = min(i+chunksize,m)
+        block_i = M[i:i_end]-Mmean[i:i_end]
+        grm+=block_i.T@block_i/Mvar_sum
+        if log:
+            pbar.update(i_end-i)
+            if i % 10 == 0:
+                memory_usage = process.memory_info().rss / 1024**3
+                pbar.set_postfix(memory=f'{memory_usage:.2f} GB')
+    return (grm+grm.T)/2
 
 def Eigendec(grm:np.ndarray):
     eigval,eigvec = np.linalg.eigh(grm)

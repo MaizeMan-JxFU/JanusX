@@ -1,10 +1,10 @@
 import typing
 import numpy as np
 from scipy.optimize import minimize_scalar
-from .QK2 import QK
+from .QK2 import GRM
     
 class BLUP:
-    def __init__(self,y:np.ndarray,M:np.ndarray,cov:np.ndarray=None,Z:np.ndarray=None, kinship:typing.Literal[None,1,2]=None):
+    def __init__(self,y:np.ndarray,M:np.ndarray,cov:np.ndarray=None,Z:np.ndarray=None, kinship:typing.Literal[None,1]=None):
         '''Fast Solve of Mixed Linear Model by Brent.
         
         :param y: Phenotype nx1\n
@@ -22,8 +22,7 @@ class BLUP:
         self.p = self.X.shape[1]
         self.kinship = kinship # 确保训练和预测的kinship方法一致
         if self.kinship is not None:
-            qkmodel = QK(M,maff=0.01,log=False)
-            self.G = qkmodel.GRM(method=self.kinship)
+            self.G = GRM(M,log=False)
             self.G+=1e-6*np.eye(self.G.shape[0]) # 添加正则项 确保矩阵正定
             self.Z = Z
         else:
@@ -58,8 +57,7 @@ class BLUP:
     def predict(self,M:np.ndarray,cov:np.ndarray=None):
         X = np.concatenate([np.ones((M.shape[1],1)),cov],axis=1) if cov is not None else np.ones((M.shape[1],1))
         if self.kinship is not None:
-            qkmodel = QK(np.concatenate([self.M, M],axis=1),maff=0.01,log=False)
-            G = qkmodel.GRM(method=self.kinship)
+            G = GRM(np.concatenate([self.M, M],axis=1),log=False)
             G+=1e-6*np.eye(G.shape[1]) # 添加正则项 确保矩阵正定
             return X@self.beta+G[self.n:, :self.n]@np.linalg.solve(self.G,self.u)
         else:
