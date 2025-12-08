@@ -22,8 +22,8 @@ def scatterh(ttest:np.ndarray,ttrain:np.ndarray=None,color_set:list=['black','gr
     if ttrain is not None:
         ax2.scatter(ttrain[:,0],ttrain[:,1],color=color_set[1],alpha=.4,marker='+',label='Train data')
     ax2.scatter(ttest[:,0],ttest[:,1],color=color_set[0],alpha=.8,marker='*',label='Test data')
-    ax2.set_xlabel('True Values')
-    ax2.set_ylabel('Predicted Values')
+    ax2.set_xlabel('Observed Value')
+    ax2.set_ylabel('Predicted Value')
     ax2.legend(loc='upper left')
     ax2.grid(True, alpha=0.3, axis='both')
     plt.gca().text(-0.2, 0.04, 
