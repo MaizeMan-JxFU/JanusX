@@ -24,6 +24,7 @@ import argparse
 import time
 import socket
 from _common.log import setup_logging
+from _common.outformat import format_dataframe_for_export
 from gfreader import breader,vcfreader,npyreader
 from pyBLUP import QK,BLUP,kfold
 
@@ -138,12 +139,10 @@ def main(log:bool=True):
     gfile = gfile.replace('\\','/') # adjust \ in Windows
     args.out = os.path.dirname(gfile) if args.out is None else args.out
     # create log file
-    if not os.path.exists(args.out):
-        os.mkdir(args.out,0o755)
+    os.makedirs(args.out,0o755,exist_ok=True)
     logger = setup_logging(f'''{args.out}/{args.prefix}.gs.log'''.replace('\\','/').replace('//','/'))
     logger.info('Genomic Selection Module')
     logger.info(f'Host: {socket.gethostname()}\n')
-    # Print configuration summary
     num = 0
     if log:
         logger.info("*"*60)
@@ -232,6 +231,7 @@ if __name__ == '__main__':
         TrainP = p.loc[samples[trainmark]].values.reshape(-1,1)
         if TrainP.size > 0:
             kfoldset = kfold(TrainSNP.shape[1],k=5,seed=None)
+            outpred = []
             for ind,method in enumerate(methods):
                 print(f'Method{ind+1}: {method}')
                 test4train,train4train = [],[]
@@ -257,6 +257,11 @@ if __name__ == '__main__':
                 # Prediction for test population
                 TestSNP = geno[:,testmark]
                 _TrainP,TestP = GSapi(TrainP,TrainSNP,TestSNP,method=method,PCAdec=args.pcd)
+                outpred.append(TestP)
+            outpred = pd.DataFrame(np.concatenate(outpred,axis=1),columns=methods,index=samples[testmark])
+            outpred = format_dataframe_for_export(outpred,float_cols=methods)
+            outpred.to_csv(f'{args.out}/{args.prefix}.{i}.gs.tsv',sep='\t')
+            logger.info(f'Saved in {args.out}/{args.prefix}.{i}.gs.tsv'.replace('//','/'))
     lt = time.localtime()
     endinfo = f'\nFinished, total time: {round(time.time()-t_start,2)} secs\n{lt.tm_year}-{lt.tm_mon}-{lt.tm_mday} {lt.tm_hour}:{lt.tm_min}:{lt.tm_sec}'
     logger.info(endinfo)

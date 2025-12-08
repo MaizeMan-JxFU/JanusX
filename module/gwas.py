@@ -34,26 +34,8 @@ import time
 import socket
 import os
 from _common.log import setup_logging
+from _common.outformat import format_dataframe_for_export
 
-def format_dataframe_for_export(df:pd.DataFrame, scientific_cols=None, float_cols=None):
-    """
-    Parameters:
-    - df: raw DataFrame
-    - scientific_cols: 科学计数法列
-    - float_cols: 浮点数列
-    """
-    df_export = df.copy()
-    # Scientific
-    if scientific_cols:
-        for col in scientific_cols:
-            if col in df_export.columns and df_export[col].dtype in [np.float64, np.int64, np.float32]:
-                df_export[col] = df_export[col].apply(lambda x: f"{x:.4e}")
-    # Float
-    if float_cols:
-        for col in float_cols:
-            if col in df_export.columns and df_export[col].dtype in [np.float64, np.int64, np.float32]:
-                df_export[col] = df_export[col].apply(lambda x: f"{x:.4f}")
-    return df_export
 def main(log:bool=True):
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -108,19 +90,24 @@ def main(log:bool=True):
     optional_group.add_argument('-o', '--out', type=str, default='.',
                                help='Output directory for results'
                                    '(default: %(default)s)')
+    optional_group.add_argument('-prefix','--prefix',type=str,default=None,
+                               help='prefix of output file'
+                                   '(default: %(default)s)')
     args = parser.parse_args()
     # Determine genotype file
     if args.vcf:
         gfile = args.vcf
+        args.prefix = os.path.basename(gfile).replace('.gz','').replace('.vcf','') if args.prefix is None else args.prefix
     elif args.bfile:
         gfile = args.bfile
+        args.prefix = os.path.basename(gfile) if args.prefix is None else args.prefix
     elif args.npy:
         gfile = args.npy
+        args.prefix = os.path.basename(gfile) if args.prefix is None else args.prefix
+    gfile = gfile.replace('\\','/') # adjust \ in Windows
     # create output folder and log file
     os.makedirs(args.out,0o755,exist_ok=True)
-    filename = os.path.basename(gfile)
-    logger = setup_logging(f'''{args.out}/{filename.replace('.vcf','').replace('.gz','')}.log'''.replace('//','/'))
-    # Print configuration summary
+    logger = setup_logging(f'''{args.out}/{args.prefix}.gwas.log'''.replace('\\','/').replace('//','/'))
     logger.info('High Performance Linear Mixed Model Solver for Genome-Wide Association Studies')
     logger.info(f'Host: {socket.gethostname()}\n')
     if log:
@@ -138,7 +125,6 @@ def main(log:bool=True):
         logger.info(f"Estimate Model:   Mixed Linear Model")
         if args.lm:
             logger.info("Estimate Model:   General Linear model")
-        logger.info(f"Output directory: {args.out}")
         logger.info(f"Estimate of GRM:  {args.grm}")
         if args.qcov != '0':
             logger.info(f"Q matrix:         {args.qcov}")
@@ -147,6 +133,7 @@ def main(log:bool=True):
         logger.info(f"Threads:          {args.thread} ({'All cores' if args.thread == -1 else 'User specified'})")
         if args.fast:
             logger.info(f"FAST mode:        {args.fast}")
+        logger.info(f"Output prefix:    {args.out}/{args.prefix}")
         logger.info("*"*60 + "\n")
     return gfile,args,logger
 
@@ -168,7 +155,11 @@ assert qcal or os.path.isfile(qdim), f'Error: {qdim} is not a dimension of PC or
 assert cov is None or os.path.isfile(cov), f"{cov} is applied, but it is not a file"
 
 # Loading genotype matrix
-logger.info(f'* Loading phenotype from {phenofile}...')
+t_loading = time.time()
+logger.info('* Loading genotype and phenotype')
+if not args.npy:
+    logger.info('Recommended: Use numpy format of genotype matrix (gformat can be used to transfer)')
+logger.info(f'Loading phenotype from {phenofile}...')
 pheno = pd.read_csv(rf'{phenofile}',sep='\t') # Col 1 - idv ID; row 1 - pheno tag
 pheno = pheno.groupby(pheno.columns[0]).mean() # Mean of duplicated samples
 pheno.index = pheno.index.astype(str)
@@ -177,27 +168,28 @@ if args.ncol is not None:
     assert args.ncol <= pheno.shape[1], "IndexError: Phenotype column index out of range."
     pheno = pheno.iloc[:,[args.ncol]]
 if args.vcf:
-    logger.info(f'* Loading genotype from {gfile}...')
+    logger.info(f'Loading genotype from {gfile}...')
     geno = vcfreader(rf'{gfile}') # VCF format
 elif args.bfile:
-    logger.info(f'* Loading genotype from {gfile}.bed...')
+    logger.info(f'Loading genotype from {gfile}.bed...')
     geno = breader(rf'{gfile}') # PLINK format
 elif args.npy:
-    logger.info(f'* Loading genotype from {gfile}.npz...')
+    logger.info(f'Loading genotype from {gfile}.npz...')
     geno = npyreader(rf'{gfile}') # numpy format
 ref_alt:pd.DataFrame = geno.iloc[:,:2]
 famid = geno.columns[2:].values.astype(str)
 geno = geno.iloc[:,2:].to_numpy(copy=False)
-logger.info('Geno and Pheno are ready!')
+logger.info(f'Geno and Pheno are ready, costed {(time.time()-t_loading):.2f} secs')
 
 # GRM & PCA
 logger.info('* Filter SNPs with MAF < 0.01 or missing rate > 0.05; impute with mode...')
 logger.info('Recommended: Use genotype matrix imputed by beagle or impute2 as input')
+t_control = time.time()
 qkmodel = QK(geno,maff=0.01)
-logger.info('Completed')
+logger.info(f'Filter finished, costed {(time.time()-t_control):.2f} secs')
 geno = qkmodel.M
 if args.dom: # Additive kinship but dominant single SNP
-    logger.info('Transfer additive gmatrix to dominance gmatrix')
+    logger.info('* Transfer additive gmatrix to dominance gmatrix')
     np.subtract(geno,1,out=geno)
     np.absolute(geno, out=geno)
 ref_alt = ref_alt.loc[qkmodel.SNPretain]
@@ -250,7 +242,7 @@ if cov:
     logger.info(f'Covmatrix {cov.shape}:')
     qmatrix = np.concatenate([qmatrix,cov],axis=1)
 if args.csnp:
-    chr_loc = args.csnp.split(':')
+    logger.info(f'* Use SNP in {args.csnp} as control for conditional GWAS')
     chr_loc_index = ref_alt.reset_index().iloc[:,:2].astype(str)
     chr_loc_index = pd.Index(chr_loc_index.iloc[:,0]+':'+chr_loc_index.iloc[:,1])
     cov = geno[chr_loc_index.get_loc(args.csnp)].reshape(-1,1)
@@ -283,8 +275,8 @@ for i in pheno.columns:
         results = pd.concat([ref_alt,results],axis=1)
         results = results.reset_index()
         results_save = format_dataframe_for_export(results, scientific_cols=['p'], float_cols=['beta','se','maf'])
-        results_save.to_csv(f'{outfolder}/{i}.mlm.tsv',sep='\t',index=False)
-        logger.info(f'Saved in {outfolder}/{i}.mlm.tsv'.replace('//','/'))
+        results_save.to_csv(f'{outfolder}/{args.prefix}.{i}.mlm.tsv',sep='\t',index=False)
+        logger.info(f'Saved in {outfolder}/{args.prefix}.{i}.mlm.tsv'.replace('//','/'))
         if args.lm:
             logger.info(f'''** General Linear Model:''')
             gwasmodel = LM(y=p_sub,X=q_sub)
@@ -293,8 +285,8 @@ for i in pheno.columns:
             results = pd.concat([ref_alt,results],axis=1)
             results = results.reset_index()
             results_save = format_dataframe_for_export(results, scientific_cols=['p'], float_cols=['beta','se','maf'])
-            results_save.to_csv(f'{outfolder}/{i}.lm.tsv',sep='\t',index=False)
-            logger.info(f'Saved in {outfolder}/{i}.lm.tsv'.replace('//','/'))
+            results_save.to_csv(f'{outfolder}/{args.prefix}.{i}.lm.tsv',sep='\t',index=False)
+            logger.info(f'Saved in {outfolder}/{args.prefix}.{i}.lm.tsv'.replace('//','/'))
     else:
         logger.info(f'Phenotype {i} has no overlapping samples with genotype, please check sample id. skipped.\n')
     logger.info(f'Time costed: {round(time.time()-t,2)} secs\n')
