@@ -4,7 +4,7 @@ from scipy.optimize import minimize_scalar
 from .QK2 import GRM
     
 class BLUP:
-    def __init__(self,y:np.ndarray,M:np.ndarray,cov:np.ndarray=None,Z:np.ndarray=None, kinship:typing.Literal[None,1]=None):
+    def __init__(self,y:np.ndarray,M:np.ndarray,cov:np.ndarray=None,Z:np.ndarray=None, kinship:typing.Literal[None,1]=None,log:bool=False):
         '''Fast Solve of Mixed Linear Model by Brent.
         
         :param y: Phenotype nx1\n
@@ -13,6 +13,7 @@ class BLUP:
         :param Z: Designed matrix for random effect nxq\n
         :param kinship: Calculation method of kinship matrix (None,1,2)
         '''
+        self.log = log
         Z = Z if Z is not None else np.eye(y.shape[0]) # Design matrix or I matrix
         assert M.shape[1] == Z.shape[1] # Test Random factor
         self.X = np.concatenate([np.ones((y.shape[0],1)),cov],axis=1) if cov is not None else np.ones((y.shape[0],1)) # Design matrix of 1st vector
@@ -22,7 +23,7 @@ class BLUP:
         self.p = self.X.shape[1]
         self.kinship = kinship # control method to calculate kinship matrix
         if self.kinship is not None:
-            self.G = GRM(M,log=False)
+            self.G = GRM(M,log=self.log)
             self.G+=1e-6*np.eye(self.G.shape[0]) # Add regular item
             self.Z = Z
         else:
@@ -57,7 +58,7 @@ class BLUP:
     def predict(self,M:np.ndarray,cov:np.ndarray=None):
         X = np.concatenate([np.ones((M.shape[1],1)),cov],axis=1) if cov is not None else np.ones((M.shape[1],1))
         if self.kinship is not None:
-            G = GRM(np.concatenate([self.M, M],axis=1),log=False)
+            G = GRM(np.concatenate([self.M, M],axis=1),log=self.log)
             G+=1e-6*np.eye(G.shape[1]) # Regular item
             return X@self.beta+G[self.n:, :self.n]@np.linalg.solve(self.G,self.u)
         else:

@@ -99,9 +99,9 @@ class QK:
 
 def GRM(M:np.ndarray,log=False,chunksize=50_000):
     m,n = M.shape
-    Mvar = np.var(M,axis=1).reshape(-1,1)
-    Mmean = np.mean(M,axis=1).reshape(-1,1)
-    Mvar_sum = np.sum(Mvar)
+    Mvar = np.var(M,axis=1,dtype='float32').reshape(-1,1)
+    Mmean = np.mean(M,axis=1,dtype='float32').reshape(-1,1)
+    Mvar_sum = np.sum(Mvar,dtype='float32')
     grm = np.zeros((n,n),dtype='float32')
     if log:
         pbar = tqdm(total=m, desc="Process of GRM",ascii=True)

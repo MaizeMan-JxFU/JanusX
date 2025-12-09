@@ -39,7 +39,7 @@ def GSapi(Y:np.ndarray,Xtrain:np.ndarray,Xtest:np.ndarray,method:typing.Literal[
         vec = val[:dim]*vec[:,:dim]
         Xtrain,Xtest = vec[:Xtrain.shape[1],:].T,vec[Xtrain.shape[1]:,:].T
     if method == 'GBLUP':
-        model = BLUP(Y.reshape(-1,1),Xtrain,kinship=1)
+        model = BLUP(Y.reshape(-1,1),Xtrain,kinship=1,log=True)
         return model.predict(Xtrain),model.predict(Xtest)
     elif method == 'rrBLUP':
         model = BLUP(Y.reshape(-1,1),Xtrain,kinship=None)
@@ -177,7 +177,7 @@ if __name__ == '__main__':
     t_start = time.time()
     gfile,args,logger = main()
     t_loading = time.time()
-    logger.info(f'Loading phenotype from {gfile}...')
+    logger.info(f'Loading phenotype from {args.pheno}...')
     pheno = pd.read_csv(rf'{args.pheno}',sep='\t') # Col 1 - idv ID; row 1 - pheno tag
     pheno = pheno.groupby(pheno.columns[0]).mean() # Mean of duplicated samples
     pheno.index = pheno.index.astype(str)
