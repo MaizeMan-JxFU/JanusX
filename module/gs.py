@@ -39,7 +39,7 @@ def GSapi(Y:np.ndarray,Xtrain:np.ndarray,Xtest:np.ndarray,method:typing.Literal[
         vec = val[:dim]*vec[:,:dim]
         Xtrain,Xtest = vec[:Xtrain.shape[1],:].T,vec[Xtrain.shape[1]:,:].T
     if method == 'GBLUP':
-        model = BLUP(Y.reshape(-1,1),Xtrain,kinship=1,log=True)
+        model = BLUP(Y.reshape(-1,1),Xtrain,kinship=1)
         return model.predict(Xtrain),model.predict(Xtest)
     elif method == 'rrBLUP':
         model = BLUP(Y.reshape(-1,1),Xtrain,kinship=None)

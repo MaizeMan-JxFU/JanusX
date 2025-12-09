@@ -17,11 +17,12 @@ def scatterh(ttest:np.ndarray,ttrain:np.ndarray=None,color_set:list=['black','gr
     ax1:plt.Axes = axe['A']
     ax2:plt.Axes = axe['C']
     ax3:plt.Axes = axe['D']
+    rasterized = True if ttrain.shape[0] > 2000 else False # Reduce storage of PDF file
     # scatterplot
     ax2.plot([np.min(ttest),np.max(ttest)],[np.min(ttest),np.max(ttest)],linestyle='--',color=color_set[0],alpha=.8,label='y = x (Ideal)')
     if ttrain is not None:
-        ax2.scatter(ttrain[:,0],ttrain[:,1],color=color_set[1],alpha=.4,marker='+',label='Train data')
-    ax2.scatter(ttest[:,0],ttest[:,1],color=color_set[0],alpha=.8,marker='*',label='Test data')
+        ax2.scatter(ttrain[:,0],ttrain[:,1],color=color_set[1],alpha=.4,marker='+',label='Train data',rasterized=rasterized)
+    ax2.scatter(ttest[:,0],ttest[:,1],color=color_set[0],alpha=.8,marker='*',label='Test data',rasterized=rasterized)
     ax2.set_xlabel('Observed Value')
     ax2.set_ylabel('Predicted Value')
     ax2.legend(loc='upper left')
