@@ -143,13 +143,13 @@ if __name__ == "__main__":
                 plotmodel.manhattan(-np.log10(threshold),ax=ax,color_set=args.color)
             plt.tight_layout()
             plt.savefig(f'{args.out}/{args.prefix}.manh.pdf',transparent=True)
-            plt.close()
+            plt.close(fig)
             fig = plt.figure(figsize=(5,4),dpi=300)
             ax2 =fig.add_subplot(111,)
             plotmodel.qq(ax=ax2,color_set=args.color)
             plt.tight_layout()
             plt.savefig(f'{args.out}/{args.prefix}.qq.pdf',transparent=True)
-            plt.close()
+            plt.close(fig)
             logger.info(f'Saved in {args.out}/{args.prefix}.manh.pdf and {args.out}/{args.prefix}.qq.pdf')
             logger.info(f'Completed, costed {round(time.time()-t_plot,2)} secs\n')
         if args.anno:
@@ -169,7 +169,7 @@ if __name__ == "__main__":
                 logger.info(f'Completed, costed {round(time.time()-t_anno,2)} secs\n')
             else:
                 logger.info(f'{args.out}/{args.prefix} is an unkwown file\n')
-    Parallel(n_jobs=args.thread,backend='threading')(delayed(GWASplot)(i) for i in args.file)
+    Parallel(n_jobs=args.thread,backend='loky')(delayed(GWASplot)(i) for i in args.file)
     lt = time.localtime()
     endinfo = f'\nFinished, Total time: {round(time.time()-t_start,2)} secs\n{lt.tm_year}-{lt.tm_mon}-{lt.tm_mday} {lt.tm_hour}:{lt.tm_min}:{lt.tm_sec}'
     logger.info(endinfo)
