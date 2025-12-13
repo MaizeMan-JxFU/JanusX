@@ -171,7 +171,7 @@ if __name__ == "__main__":
                 logger.info(f'Saved in {args.out}/{args.prefix}.{threshold}.anno.tsv')
                 logger.info(f'Completed, costed {round(time.time()-t_anno,2)} secs\n')
             else:
-                logger.info(f'{args.out}/{args.prefix} is an unkwown file\n')
+                logger.info(f'{args.anno} is an unkwown file\n')
     Parallel(n_jobs=args.thread,backend='loky')(delayed(GWASplot)(i) for i in args.file)
     lt = time.localtime()
     endinfo = f'\nFinished, Total time: {round(time.time()-t_start,2)} secs\n{lt.tm_year}-{lt.tm_mon}-{lt.tm_mday} {lt.tm_hour}:{lt.tm_min}:{lt.tm_sec}'
