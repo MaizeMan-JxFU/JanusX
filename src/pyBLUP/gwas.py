@@ -1,3 +1,4 @@
+from re import L
 import numpy as np
 from scipy.optimize import minimize_scalar
 from scipy.stats import norm
@@ -159,6 +160,21 @@ class LM:
         self.y = y.reshape(-1,1) # ensure the dim of y
         self.X = np.concatenate([np.ones((y.shape[0],1)),X],axis=1) if X is not None else np.ones((y.shape[0],1))
         pass
+    def _fit(self,snp):
+        '''
+        solving beta and its se in multiprocess
+        '''
+        X = np.column_stack([self.X, snp])
+        XTX = X.T@X
+        try:
+            XTX_inv = np.linalg.inv(XTX)
+        except:
+            XTX_inv = np.linalg.inv(XTX+np.eye(XTX.shape[0]))
+        XTy = X.T@self.y
+        beta = XTX_inv@XTy
+        r = (self.y-X@beta)
+        se = np.sqrt((r.T@r)/(X.shape[0]-XTX.shape[0])*XTX_inv[-1,-1])
+        return beta[-1,0],se[0,0]
     def gwas(self,snp:np.ndarray=None,chunksize=100_000,threads=1):
         '''
         Speed version of mlm
@@ -171,26 +187,11 @@ class LM:
         m,n = snp.shape
         beta_se_p = []
         pbar = tqdm(total=m, desc="Process of GWAS",ascii=True)
-        def process_col(i):
-            '''
-            solving beta and its se in multiprocess
-            '''
-            X = np.column_stack([self.X, snp_chunk[:, i]])
-            XTX = X.T@X
-            try:
-                XTX_inv = np.linalg.inv(XTX)
-            except:
-                XTX_inv = np.linalg.inv(XTX+np.eye(XTX.shape[0]))
-            XTy = X.T@self.y
-            beta = XTX_inv@XTy
-            r = (self.y-X@beta)
-            se = np.sqrt((r.T@r)/(n-XTX.shape[0])*XTX_inv[-1,-1])
-            return beta[-1,0],se[0,0]
         for i in range(0,m,chunksize):
             i_end = min(i+chunksize,m)
             snp_chunk = snp[i:i_end].T
             if snp_chunk.shape[1]>0:
-                results = np.array(Parallel(n_jobs=threads)(delayed(process_col)(i) for i in range(snp_chunk.shape[1])))
+                results = np.array(Parallel(n_jobs=threads)(delayed(self._fit)(snp_chunk[:,i]) for i in range(snp_chunk.shape[1])))
                 beta_se_p.append(np.concatenate([results,2*norm.sf(np.abs(results[:,0]/results[:,1])).reshape(-1,1)],axis=1))
             if self.log:
                 pbar.update(i_end-i)

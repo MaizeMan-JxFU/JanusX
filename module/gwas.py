@@ -34,13 +34,13 @@ import time
 import socket
 import os
 from _common.log import setup_logging
-from _common.outformat import format_dataframe_for_export
 
-def CLI(log:bool=True):
+def main(log:bool=True):
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__
     )
+    t_start = time.time()
     # Required arguments
     required_group = parser.add_argument_group('Required arguments')
     ## Genotype file
@@ -85,8 +85,6 @@ def CLI(log:bool=True):
                                    '(default: %(default)s)')
     optional_group.add_argument('-t','--thread', type=int, default=-1,
                                help='Number of CPU threads to use (-1 for all available cores, default: %(default)s)')
-    optional_group.add_argument('-fast','--fast', action='store_true', default=False,
-                               help='Enable fast mode for GWAS (default: %(default)s)')
     optional_group.add_argument('-o', '--out', type=str, default='.',
                                help='Output directory for results'
                                    '(default: %(default)s)')
@@ -131,21 +129,13 @@ def CLI(log:bool=True):
         if args.cov:
             logger.info(f"Covariant matrix: {args.cov}")
         logger.info(f"Threads:          {args.thread} ({'All cores' if args.thread == -1 else 'User specified'})")
-        if args.fast:
-            logger.info(f"FAST mode:        {args.fast}")
         logger.info(f"Output prefix:    {args.out}/{args.prefix}")
         logger.info("*"*60 + "\n")
-    return gfile,args,logger
-
-def main():
-    t_start = time.time()
-    gfile,args,logger = CLI()
     try:
         phenofile,outfolder = args.pheno,args.out
         kinship_method = args.grm
         qdim = args.qcov
         cov = args.cov
-        FASTmode = args.fast
         threads = args.thread
         kcal = True if kinship_method in ['1','2'] else False
         qcal = True if qdim in np.arange(0,30).astype(str) else False
@@ -270,25 +260,25 @@ def main():
             k_sub = kmatrix[famidretain][:,famidretain]
             if len(p)>0:
                 gwasmodel = GWAS(y=p_sub,X=q_sub,kinship=k_sub)
-                logger.info(f'''** Mixed Linear Model:''')
-                logger.info(f'''Number of samples: {np.sum(famidretain)}, Number of SNP: {geno.shape[0]}, pve of null: {round(gwasmodel.pve,3)}, FAST mode: {FASTmode}''')
-                results = gwasmodel.gwas(snp=snp_sub,chunksize=100_000,threads=threads,fast=FASTmode) # gwas running...
-                logger.info(f'Effective number of SNP: {results.shape[0]}')
-                results = pd.DataFrame(results,columns=['beta','se','p'],index=ref_alt.index)
+                logger.info(f'** Mixed Linear Model:')
+                logger.info(f'''Number of samples: {np.sum(famidretain)}, Number of SNP: {geno.shape[0]}, pve of null: {round(gwasmodel.pve,3)}''')
+                results = gwasmodel.gwas(snp=snp_sub,chunksize=100_000,threads=threads) # gwas running...
+                results = pd.DataFrame(results,columns=['beta','se','p0'],index=ref_alt.index)
                 results = pd.concat([ref_alt,results],axis=1)
-                results = results.reset_index()
-                results_save = format_dataframe_for_export(results, scientific_cols=['p'], float_cols=['beta','se','maf'])
-                results_save.dropna().to_csv(f'{outfolder}/{args.prefix}.{i}.mlm.tsv',sep='\t',index=False)
+                results = results.reset_index().dropna()
+                logger.info(f'Effective number of SNP: {results.shape[0]}')
+                results.loc[:,'p'] = results['p0'].map(lambda x: f"{x:.4e}");del results["p0"]
+                results.to_csv(f"{outfolder}/{args.prefix}.{i}.mlm.tsv",sep="\t",float_format="%.4f",index=False)
                 logger.info(f'Saved in {outfolder}/{args.prefix}.{i}.mlm.tsv'.replace('//','/'))
                 if args.lm:
-                    logger.info(f'''** General Linear Model:''')
+                    logger.info(f'** General Linear Model:')
                     gwasmodel = LM(y=p_sub,X=q_sub)
                     results = gwasmodel.gwas(snp=snp_sub,chunksize=100_000,threads=threads) # gwas running...
-                    results = pd.DataFrame(results,columns=['beta','se','p'],index=ref_alt.index)
+                    results = pd.DataFrame(results,columns=['beta','se','p0'],index=ref_alt.index)
                     results = pd.concat([ref_alt,results],axis=1)
-                    results = results.reset_index()
-                    results_save = format_dataframe_for_export(results, scientific_cols=['p'], float_cols=['beta','se','maf'])
-                    results_save.to_csv(f'{outfolder}/{args.prefix}.{i}.lm.tsv',sep='\t',index=False)
+                    results = results.reset_index().dropna()
+                    results.loc[:,'p'] = results['p0'].map(lambda x: f"{x:.4e}");del results["p0"]
+                    results.to_csv(f"{outfolder}/{args.prefix}.{i}.lm.tsv",sep="\t",float_format="%.4f",index=None)
                     logger.info(f'Saved in {outfolder}/{args.prefix}.{i}.lm.tsv'.replace('//','/'))
             else:
                 logger.info(f'Phenotype {i} has no overlapping samples with genotype, please check sample id. skipped.\n')
