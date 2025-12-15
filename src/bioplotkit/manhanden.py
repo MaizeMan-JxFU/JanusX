@@ -4,12 +4,6 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 from scipy.stats import beta
 import time
-import warnings
-warnings.filterwarnings(
-    "ignore",
-    category=FutureWarning,
-    message=".*ChainedAssignmentError.*"
-)
 
 def ppoints(n)->np.ndarray:
     '''

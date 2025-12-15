@@ -33,8 +33,14 @@ import socket
 from ._common.log import setup_logging
 from ._common.readanno import readanno
 from joblib import Parallel,delayed
+import warnings
 
 def GWASplot(file,args,logger):
+    warnings.filterwarnings(
+        "ignore",
+        category=FutureWarning,
+        message=".*ChainedAssignmentError.*"
+    )
     args.prefix = os.path.basename(file).replace('.tsv','').replace('.txt','')
     chr_string,pos_string,pvalue_string = args.chr,args.pos,args.pvalue
     df = pd.read_csv(file,sep='\t',usecols=[chr_string,pos_string,pvalue_string])
