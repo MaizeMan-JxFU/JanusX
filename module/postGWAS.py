@@ -30,8 +30,8 @@ import numpy as np
 import argparse
 import time
 import socket
-from ._common.log import setup_logging
-from ._common.readanno import readanno
+from _common.log import setup_logging
+from _common.readanno import readanno
 from joblib import Parallel,delayed
 import warnings
 

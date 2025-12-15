@@ -23,7 +23,7 @@ from sklearn.model_selection import GridSearchCV,RandomizedSearchCV
 import argparse
 import time
 import socket
-from ._common.log import setup_logging
+from _common.log import setup_logging
 from gfreader import breader,vcfreader,npyreader
 from pyBLUP import QK,BLUP,kfold
 
