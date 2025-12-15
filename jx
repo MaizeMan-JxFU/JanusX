@@ -1,16 +1,17 @@
 #! .venv/bin/python
 # -*- coding: utf-8 -*-
 import sys
-import matplotlib as mpl
-mpl.use('Agg')
-import matplotlib.backends.backend_pdf # pdf support
-from module import gwas,gs,postGWAS,grm,pca,gformat
 import warnings
 warnings.filterwarnings(
     "ignore",
     category=FutureWarning,
     message=".*ChainedAssignmentError.*"
 )
+import matplotlib as mpl
+mpl.use('Agg')
+import matplotlib.backends.backend_pdf # pdf support
+from module import gwas,gs,postGWAS,grm,pca,gformat
+
 __logo__ = r'''
        _                      __   __
       | |                     \ \ / /
