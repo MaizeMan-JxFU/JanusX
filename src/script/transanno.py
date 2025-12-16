@@ -1,6 +1,6 @@
 import pandas as pd
 import sys
-from _common.readanno import readanno
+from ._common.readanno import readanno
 
 filterfile = sys.argv[1]
 idtransfile = sys.argv[2]

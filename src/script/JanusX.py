@@ -10,7 +10,7 @@ warnings.filterwarnings(
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.backends.backend_pdf # pdf support
-import gwas,gs,postGWAS,grm,pca,gformat
+from . import gwas,gs,postGWAS,grm,pca,gformat
 
 __logo__ = r'''
        _                      __   __
@@ -21,7 +21,8 @@ __logo__ = r'''
   \____/ \__,_|_| |_|\__,_|___/_/ \_\
 '''
 __version__ = 'JanusX v1.0.0'
-if __name__ == "__main__":
+
+def main():
     module = dict(zip(['gwas','gs','postGWAS','grm','pca','gformat'],[gwas,gs,postGWAS,grm,pca,gformat]))
     extmodule = {}
     print(__logo__)
@@ -43,3 +44,6 @@ if __name__ == "__main__":
     else:
         print(f'Usage: {sys.argv[0]} <module> [parameter]')
         print(f'''Modules: {' '.join(module.keys())}''')
+        
+if __name__ == "__main__":
+    main()

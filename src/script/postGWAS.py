@@ -12,7 +12,7 @@ Citation:
   https://github.com/MaizeMan-JxFU/JanusX/
 '''
 import os
-from _common.log import setup_logging
+from ._common.log import setup_logging
 for key in ['MPLBACKEND']:
     if key in os.environ:
         del os.environ[key]
@@ -25,7 +25,7 @@ import numpy as np
 import argparse
 import time
 import socket
-from _common.readanno import readanno
+from ._common.readanno import readanno
 from joblib import Parallel,delayed
 import warnings
 from bioplotkit.sci_set import color_set

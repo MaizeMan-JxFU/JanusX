@@ -20,7 +20,7 @@ from bioplotkit.sci_set import color_set
 from bioplotkit import PCSHOW
 from gfreader import breader,vcfreader,npyreader
 from pyBLUP import QK,Eigendec
-from _common.log import setup_logging
+from ._common.log import setup_logging
 
 def main(log:bool=True):
     t_start = time.time()

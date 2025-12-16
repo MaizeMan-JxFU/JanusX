@@ -41,7 +41,7 @@ import numpy as np
 import argparse
 import time
 import socket
-from _common.log import setup_logging
+from ._common.log import setup_logging
 
 def main(log:bool=True):
     parser = argparse.ArgumentParser(
