@@ -47,7 +47,7 @@ class GWASPLOT:
         self.ticks_loc = df.groupby('z')['x'].mean()
         self.df = df.set_index([chr,pos])
         pass
-    def manhattan(self, threshold:float=None, color_set:list=[], ax:plt.Axes = None, ignore:list=[]):
+    def manhattan(self, threshold:float=None, color_set:list=[], ax:plt.Axes = None, ignore:list=[],**kwargs):
         df = self.df.iloc[self.minidx,-3:].copy()
         df['y'] = -np.log10(df['y'])
         df = df[df['y']>=0.5]
@@ -58,11 +58,11 @@ class GWASPLOT:
         if len(color_set) == 0:
             color_set = ['black','grey']
         colors = dict(zip(self.chrlist,[color_set[i%len(color_set)] for i in range(len(self.chrlist))]))
-        ax.scatter(df[~df.index.isin(ignore)]['x'], df[~df.index.isin(ignore)]['y'], alpha=1, s=8, color=df[~df.index.isin(ignore)]['z'].map(colors),rasterized=True)
+        ax.scatter(df[~df.index.isin(ignore)]['x'], df[~df.index.isin(ignore)]['y'], s=8, color=df[~df.index.isin(ignore)]['z'].map(colors),**kwargs)
         if threshold != None and max(df['y'])>=threshold:
             df_annote = df[df['y']>=threshold]
-            ax.scatter(df_annote[~df_annote.index.isin(ignore)]['x'], df_annote[~df_annote.index.isin(ignore)]['y'], alpha=1, s=16, color='red',rasterized=True)
-            ax.hlines(y=threshold, xmin=0, xmax=max(df['x']),color='grey', linewidth=1, alpha=1, linestyles='--')
+            ax.scatter(df_annote[~df_annote.index.isin(ignore)]['x'], df_annote[~df_annote.index.isin(ignore)]['y'], s=16, color='red',**kwargs)
+            ax.hlines(y=threshold, xmin=0, xmax=max(df['x']),color='grey', linewidth=1, linestyles='--')
         ax.set_xticks(self.ticks_loc, self.chruniq)
         ax.set_xlim([0-self.interval,max(df['x'])+self.interval])
         ax.set_ylim([0.5,max(df['y'])+0.1*max(df['y'])])

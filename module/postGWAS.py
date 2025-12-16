@@ -18,10 +18,7 @@ for key in ['MPLBACKEND']:
         del os.environ[key]
 import matplotlib as mpl
 mpl.use('Agg')
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype'] = 42
 from bioplotkit import GWASPLOT
-from bioplotkit.sci_set import color_set
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -31,8 +28,13 @@ import socket
 from _common.readanno import readanno
 from joblib import Parallel,delayed
 import warnings
+from bioplotkit.sci_set import color_set
 
 def GWASplot(file,args,logger):
+    mpl.rcParams['pdf.fonttype'] = 42
+    mpl.rcParams['ps.fonttype'] = 42
+    plt.rcParams['svg.fonttype'] = 'none'
+    plt.rcParams['axes.unicode_minus'] = False
     warnings.filterwarnings(
         "ignore",
         category=FutureWarning,
@@ -48,6 +50,7 @@ def GWASplot(file,args,logger):
         plotmodel = GWASPLOT(df,chr_string,pos_string,pvalue_string,0.1)
         fig = plt.figure(figsize=(8,4),dpi=300)
         ax =fig.add_subplot(111,)
+        rasterized = False if args.format == 'pdf' else True
         if args.highlight:
             df_hl = pd.read_csv(args.highlight,sep='\t',index_col=None,header=None,)
             genenamemask = df_hl[3].isna()
@@ -60,19 +63,19 @@ def GWASplot(file,args,logger):
             for idx in df_hl_idx:
                 text = df_hl.loc[idx,3]
                 ax.text(plotmodel.df.loc[idx,'x'],-np.log10(plotmodel.df.loc[idx,'y']),s=text,ha='center',zorder=11)
-            plotmodel.manhattan(None,ax=ax,color_set=args.color,ignore=df_hl_idx)
+            plotmodel.manhattan(None,ax=ax,color_set=args.color,ignore=df_hl_idx,rasterized=rasterized)
         else:
-            plotmodel.manhattan(-np.log10(threshold),ax=ax,color_set=args.color)
+            plotmodel.manhattan(-np.log10(threshold),ax=ax,color_set=args.color,rasterized=rasterized)
         plt.tight_layout()
-        plt.savefig(f'{args.out}/{args.prefix}.manh.pdf',transparent=True)
+        plt.savefig(f'{args.out}/{args.prefix}.manh.{args.format}',transparent=True)
         plt.close(fig)
         fig = plt.figure(figsize=(5,4),dpi=300)
         ax2 =fig.add_subplot(111)
         plotmodel.qq(ax=ax2,color_set=args.color)
         plt.tight_layout()
-        plt.savefig(f'{args.out}/{args.prefix}.qq.pdf',transparent=True)
+        plt.savefig(f'{args.out}/{args.prefix}.qq.{args.format}',transparent=True)
         plt.close(fig)
-        logger.info(f'Saved in {args.out}/{args.prefix}.manh.pdf and {args.out}/{args.prefix}.qq.pdf')
+        logger.info(f'Saved in {args.out}/{args.prefix}.manh.{args.format} and {args.out}/{args.prefix}.qq.{args.format}')
         logger.info(f'Completed, costed {round(time.time()-t_plot,2)} secs\n')
     if args.anno:
         logger.info('* Annotating...')
@@ -122,6 +125,8 @@ def main():
                                help='Color style for manhanden and qq figure, 0-6 (default: %(default)s)')
     optional_group.add_argument('-hl','--highlight', type=str, default=None,
                                help='Hightlight SNP with gene name in .bed file, eg. 1\t100021\t100021\tgenename\tfunction (default: %(default)s)')
+    optional_group.add_argument('-format','--format', type=str, default='pdf',
+                               help='Figure format, eg. pdf, png, svg, tif (default: %(default)s)')
     optional_group.add_argument('-a','--anno', type=str, default=None,
                                help='annotation option, .gff file or .bed file'
                                    '(default: %(default)s)')
@@ -142,6 +147,7 @@ def main():
                                help='Number of CPU threads to use (-1 for all available cores, default: %(default)s)')
     args = parser.parse_args()
     assert args.color <= 6, 'colorset error: try 0-6'
+    assert args.format in ['pdf', 'png', 'svg', 'tif'], f"Figure format error, {args.format} is not 'pdf', 'png', 'svg', 'tif'"
     args.color = color_set[args.color]
     args.out = os.path.dirname(args.file[0]) if args.out is None else args.out
     args.prefix = 'JanusX' if args.prefix is None else args.prefix
@@ -160,11 +166,12 @@ def main():
     logger.info(f"Chr tag:       {args.chr}")
     logger.info(f"Pos tag:       {args.pos}")
     logger.info(f"Pvalue tag:    {args.pvalue}")
+    logger.info(f"Threshold:     {args.threshold if args.threshold else '0.05/nSNP'}")
     if args.noplot:
         logger.info("GWAS Visulazation:")
-        logger.info(f"Threshold:     {args.threshold if args.threshold else '0.05/nSNP'}")
         logger.info(f"Color:         {args.color}")
         logger.info(f'Highlight bed: {args.highlight}')
+        logger.info(f'Figure format: {args.format}')
     if args.anno:
         logger.info("GWAS Annotation:")
         logger.info(f"Anno file:     {args.anno}")
