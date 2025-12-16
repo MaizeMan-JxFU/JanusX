@@ -32,8 +32,11 @@ Simply download and extract the archive, then run the executable directly.
 ### Running the CLI
 
 ```bash
+./jx -h
 ./jx <module> [options]
 ```
+
+Note that running ```./jx -h``` might take a while at first! This is because the Python interpreter is compiling source code into the pycache directory. Subsequent runs will use the pre-compiled code and load much faster!
 
 ### Available Modules
 
