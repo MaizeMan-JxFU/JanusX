@@ -110,22 +110,41 @@ fn student_t_cdf(t: f64, df: i32) -> f64 {
 //     p
 // }
 
+// fn student_t_p_two_sided(t: f64, df: i32) -> f64 {
+//     if df <= 0 { return f64::NAN; }
+//     if !t.is_finite() { return 0.0; }
+
+//     let v = df as f64;
+//     let tt = t.abs();
+//     let x = v / (v + tt * tt);      // in (0,1]
+//     let a = v / 2.0;
+//     let b = 0.5;
+
+//     // ✅ two-sided p-value == regularized incomplete beta I_x(a,b)
+//     // avoids catastrophic cancellation from 1 - cdf
+//     let mut p = betai(a, b, x);
+
+//     if p < 0.0 { p = 0.0; }
+//     if p > 1.0 { p = 1.0; }
+//     p
+// }
+
+#[inline]
 fn student_t_p_two_sided(t: f64, df: i32) -> f64 {
     if df <= 0 { return f64::NAN; }
-    if !t.is_finite() { return 0.0; }
+    if !t.is_finite() { return if t.is_nan() { f64::NAN } else { 0.0 }; }
 
     let v = df as f64;
-    let tt = t.abs();
-    let x = v / (v + tt * tt);      // in (0,1]
+    let x = v / (v + t * t);
     let a = v / 2.0;
     let b = 0.5;
 
-    // ✅ two-sided p-value == regularized incomplete beta I_x(a,b)
-    // avoids catastrophic cancellation from 1 - cdf
+    // 双侧 p 直接等于 regularized incomplete beta
     let mut p = betai(a, b, x);
 
-    if p < 0.0 { p = 0.0; }
-    if p > 1.0 { p = 1.0; }
+    // 兜底：NaN/Inf -> 1；过小 -> clamp 到最小正数，避免 0
+    if !p.is_finite() { p = 1.0; }
+    p = p.clamp(f64::MIN_POSITIVE, 1.0);
     p
 }
 
@@ -312,9 +331,14 @@ fn glmi8<'py>(
 
                         // pvalues for all coefficients
                         for ff in 0..dim {
+                            // let se = (ixxs[ff * dim + ff] * ve).sqrt();
+                            // let t = beta[ff] / se;
+                            // row_out[2 + ff] = student_t_p_two_sided(t, df);
                             let se = (ixxs[ff * dim + ff] * ve).sqrt();
                             let t = beta[ff] / se;
-                            row_out[2 + ff] = student_t_p_two_sided(t, df);
+                            let mut p = student_t_p_two_sided(t, df);
+                            p = p.clamp(f64::MIN_POSITIVE, 1.0);
+                            row_out[2 + ff] = p;
                         }
 
                         // beta/se for SNP
