@@ -44,7 +44,7 @@ import time
 import socket
 from ._common.log import setup_logging
 
-def fastplot(gwasresult:pd.DataFrame,phenosub:pd.DataFrame,xlabel:str='',ylabel:str='',outpdf:str='fastplot.pdf'):
+def fastplot(gwasresult:pd.DataFrame,phenosub:pd.DataFrame,xlabel:str='',outpdf:str='fastplot.pdf'):
     '''Fast plot for GWASresult data'''
     results = gwasresult.astype({"POS": "int64"})
     fig = plt.figure(figsize=(16,4),dpi=300)
@@ -330,7 +330,7 @@ def main(log:bool=True):
                     logger.info(f'Saved in {outfolder}/{args.prefix}.{i}.lm.tsv'.replace('//','/'))
                 if args.farmcpu:
                     logger.info(f'** FarmCPU Model:')
-                    results = farmcpu(y=p_sub,M=snp_sub,X=q_sub,chrlist=ref_alt.reset_index().iloc[:,0].values,poslist=ref_alt.reset_index().iloc[:,1].values,iteration=20,threads=threads)
+                    results = farmcpu(y=p_sub,M=snp_sub,X=q_sub,chrlist=ref_alt.reset_index().iloc[:,0].values,poslist=ref_alt.reset_index().iloc[:,1].values,iter=20,threads=threads)
                     results = pd.DataFrame(results,columns=['beta','se','p'],index=ref_alt.index)
                     results = pd.concat([ref_alt,results],axis=1)
                     results = results.reset_index()

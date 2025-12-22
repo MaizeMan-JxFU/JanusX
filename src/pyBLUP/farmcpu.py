@@ -283,8 +283,8 @@ def SUPER(corr:np.ndarray,pval:list,thr:float=0.7):
     return keep
 
 def farmcpu(y:np.ndarray=None,M:np.ndarray=None,X:np.ndarray=None,chrlist:np.ndarray=None,poslist:np.ndarray=None,
-            szbin: list = [5e5,5e6,5e7],nbin: list = range(10,101,10), QTNbound: int = None,
-            iteration:int=30,threshold:float=0.05,threads:int=1):
+            szbin: list = [5e5,5e6,5e7],nbin: int = 5, QTNbound: int = None,
+            iter:int=30,threshold:float=0.05,threads:int=1):
     '''
     Fast Solve of Mixed Linear Model by Brent.
     
@@ -297,14 +297,12 @@ def farmcpu(y:np.ndarray=None,M:np.ndarray=None,X:np.ndarray=None,chrlist:np.nda
     m,n = M.shape
     chrunique = np.unique(chrlist);chrdict = dict(zip(chrunique, range(len(chrunique)))) # transform chr to int
     pos = np.array([int(poslist[i]) + chrdict[chrlist[i]]*1e12 for i in range(len(chrlist))])
-    QTNbound = np.sqrt(n/np.log10(n)) if QTNbound is None else QTNbound # max number of QTNs
+    QTNbound = int(np.sqrt(n/np.log10(n))) if QTNbound is None else QTNbound # max number of QTNs
     szbin = np.array(szbin)
-    nbin = np.array(nbin)
-    nbin[nbin > QTNbound] = QTNbound
-    nbin = np.unique(nbin[nbin>0].astype(int))
+    nbin = np.array(range(QTNbound//nbin,QTNbound+1,QTNbound//nbin))
     X = np.concatenate([np.ones((y.shape[0],1)),X],axis=1) if X is not None else np.ones((y.shape[0],1))
     QTNidx = np.array([],dtype=int) # init for QTNidx
-    for _ in trange(iteration,desc=f'Process of FarmCPU',ascii=True):
+    for _ in trange(iter,desc=f'Process of FarmCPU',ascii=True):
         X_QTN = np.concatenate([X,M[QTNidx].T],axis=1) if QTNidx.size > 0 else X
         FEMresult = FEM(y,X_QTN,M,threads=threads)
         FEMresult[:,2:] = np.nan_to_num(FEMresult[:,2:],nan=1)
