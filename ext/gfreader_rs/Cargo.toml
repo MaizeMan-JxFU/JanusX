@@ -1,0 +1,17 @@
+[package]
+name = "gfreader_rs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "gfreader_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+# 改成 0.21 系列，和 numpy 匹配
+pyo3 = { version = "0.21", features = ["extension-module"] }
+numpy = "0.21"
+ndarray = "0.15"
+csv = "1.3"
+flate2 = "1.0"
+memmap2 = "0.9"

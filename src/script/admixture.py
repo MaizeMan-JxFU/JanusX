@@ -6,7 +6,7 @@ import socket
 from joblib import cpu_count
 from ._common.log import setup_logging
 from rust2py.g2phy import geno2phy
-from ext.downloader import main as iqtree  # Ensure iqtree dependencies are checked at startup
+from ext.downloader import main as admixture  # Ensure admixture dependencies are checked at startup
 def main(log:bool=True):
     t_start = time.time()
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,epilog=__doc__)
@@ -45,13 +45,13 @@ def main(log:bool=True):
     args.out = os.path.dirname(gfile) if args.out is None else args.out
     args.threads = cpu_count() if args.threads < 1 else args.threads
     os.makedirs(args.out,0o755,True) # create log file
-    logger = setup_logging(f'''{args.out}/{args.prefix}.phylogeny.log'''.replace('\\','/').replace('//','/'))
-    logger.info('Phylogeny Analysis Module')
+    logger = setup_logging(f'''{args.out}/{args.prefix}.admixture.log'''.replace('\\','/').replace('//','/'))
+    logger.info('ADMIXTURE Analysis Module')
     logger.info(f'Host: {socket.gethostname()}\n')
     # Print configuration summary
     if log:
         logger.info("*"*60)
-        logger.info("PHYLOGENY CONFIGURATION")
+        logger.info("ADMIXTURE CONFIGURATION")
         logger.info("*"*60)
         logger.info(f"Genotype file: {gfile}")
         logger.info(f"Threads:       {args.threads}")
@@ -66,13 +66,7 @@ def main(log:bool=True):
               write_fasta=False,
               write_nexus=False,
               write_nexus_binary=False,used_sites=False)
-    os.system(f'{iqtree("iqtree3")} -s {args.out}/{args.prefix}.phy -st DNA -m MFP+ASC -bb 1000 -alrt 1000 -nt {args.threads}')
-    if os.path.isfile(f'{args.out}/{args.prefix}.phy.varsites.phy'):
-        os.remove(f'{args.out}/{args.prefix}.phy')
-        os.remove(f'{args.out}/{args.prefix}.phy.log')
-        os.remove(f'{args.out}/{args.prefix}.phy.model.gz')
-        os.system(f'{iqtree("iqtree3")} -s {args.out}/{args.prefix}.phy.varsites.phy -pre {args.out}/{args.prefix}.var -st DNA -m MFP+ASC -bb 1000 -bnni -alrt 1000 -nt {args.threads} -redo')
-        os.remove(f'{args.out}/{args.prefix}.phy.varsites.phy')
+    os.system(f'{admixture("admixture")} -h')
     
     # Finish logging
     lt = time.localtime()

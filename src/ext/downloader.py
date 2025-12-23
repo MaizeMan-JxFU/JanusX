@@ -2,11 +2,15 @@ from __future__ import annotations
 import os
 import threading
 from typing import List, Tuple, Optional
+import typing
 import requests
 from joblib import Parallel, delayed
 from tqdm import tqdm
 from retry import retry
 import zipfile
+import platform
+import gzip
+import shutil
 
 headers = {
     "User-Agent": (
@@ -146,6 +150,26 @@ def download_joblib(
     finally:
         bar.close()
 
+def main(extmodule:typing.Literal['admixture','iqtree3']):
+    scriptpath = os.path.dirname(os.path.abspath(__file__))
+    platform_name = platform.system()
+    assert platform_name in ['Linux', 'Darwin'], 'Only Linux and macOS are supported.'
+    arc = {'Linux': 'x86_64', 'Darwin': 'universal'}
+    os.makedirs(f'{scriptpath}/../../ext/bin/', exist_ok=True)
+    extbin = f'{scriptpath}/../../ext/bin'
+    # Denpendency check
+    ## iqtree
+    if not os.path.isfile(f'{extbin}/{extmodule}'):
+        print(f'Downloading and compiling {extmodule}...')
+        url = f'http://maize.jxfu.top:23000/Jingxian/JanusXext/raw/main/package/{extmodule}-{platform_name}-{arc[platform_name]}.gz'
+        download_joblib(url, f'{extbin}/{extmodule}.gz', n_jobs=-1)
+        with gzip.open(f'{extbin}/{extmodule}.gz', "rb") as f_in, open(f'{extbin}/{extmodule}', "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        os.chmod(f'{extbin}/{extmodule}', 0o755)
+        os.remove(f'{extbin}/{extmodule}.gz')
+        print(f'{extmodule} downloaded and compiled successfully.')
+    ## Main
+    return f'{extbin}/{extmodule}'
 
 if __name__ == "__main__":
     url = "https://github.com/iqtree/iqtree3/releases/download/v3.0.1/iqtree-3.0.1-macOS.zip"

@@ -114,7 +114,8 @@ class GWAS:
         m,n = snp.shape
         lbds = []
         beta_se_p = []
-        pbar = tqdm(total=m, desc="Process of GWAS",ascii=True)
+        if self.log:
+            pbar = tqdm(total=m, desc="Process of GWAS",ascii=True)
         for i in range(0,m,chunksize):
             i_end = min(i+chunksize,m)
             snp_chunk = snp[i:i_end]@self.Dh.T
