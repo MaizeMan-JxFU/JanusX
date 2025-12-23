@@ -1,0 +1,22 @@
+[package]
+name = "lmm_rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jingxian FU <827888724@qq.com>"]
+description = "Fast REML-based MLM GWAS in Rust with Python bindings"
+license = "MIT"
+
+[lib]
+name = "lmm_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+# 注意：这里显式锁定 pyo3 0.21.x，避免和 numpy 里的 pyo3 冲突
+pyo3 = { version = "0.21.2", features = ["extension-module", "abi3-py38"] }
+
+# numpy crate 0.21.* 依赖的也是 pyo3 0.21.*，这样就不会再出现 links=python 冲突
+numpy = { version = "0.21.0" }
+
+ndarray = "0.15"
+rayon = "1.10"
+libm = "0.2"

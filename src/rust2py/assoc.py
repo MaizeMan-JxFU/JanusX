@@ -1,9 +1,10 @@
 try:
-    from jxglm_rs import glmi8,mlmi8,mlmpi8
+    from jxglm_rs import glmi8,mlmi8,mlmpf32
 except Exception as e:
     print(f"{e}\nPlease build jxglm_rs for glmrc. Source code is in ext/glm_rs")
 import numpy as np   
-    
+
+
 def FEM(y:np.ndarray,X:np.ndarray,M:np.ndarray,chunksize:int=50_000,threads:int=1,):
     '''
     # fastGLM for dtype int8
@@ -72,4 +73,4 @@ def poolMLM(y, X, UT, G_pool, vgs=1.0, ridge=1e-10):
     X = np.ascontiguousarray(X, dtype=np.float64)
     UT = np.ascontiguousarray(UT, dtype=np.float64)
     G_pool = np.ascontiguousarray(G_pool, dtype=np.int8)
-    return mlmpi8(y, X, UT, G_pool, float(vgs), float(ridge))
+    return mlmpf32(y, X, UT, G_pool, float(vgs), float(ridge))
