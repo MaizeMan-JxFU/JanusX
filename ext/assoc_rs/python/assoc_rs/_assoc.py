@@ -1,6 +1,6 @@
 # from assoc_rs import glmf32,lmm_reml_chunk_f32
 import numpy as np
-from assoc_rs import glmf32, lmm_reml_chunk_f32
+from .assoc_rs import glmf32, lmm_reml_chunk_f32
 
 
 def FEM(y:np.ndarray,X:np.ndarray,M:np.ndarray,chunksize:int=50_000,threads:int=1,):

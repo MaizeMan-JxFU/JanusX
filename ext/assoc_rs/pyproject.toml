@@ -13,4 +13,5 @@ build-backend = "maturin"
 [tool.maturin]
 bindings = "pyo3"
 module-name = "assoc_rs"
-python-source = "assoc"
+python-source = "python"
+include = ["python/**"]
