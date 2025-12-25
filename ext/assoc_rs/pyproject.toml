@@ -1,0 +1,16 @@
+[project]
+name = "assoc_rs"
+version = "0.1.0"
+requires-python = ">=3.8"
+dependencies = [
+  "numpy>=2.0"
+]
+
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "assoc_rs"
+python-source = "assoc"

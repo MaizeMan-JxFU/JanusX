@@ -1,8 +1,6 @@
-try:
-    from assoc_rs import glmf32,lmm_reml_chunk_f32
-except Exception as e:
-    raise ImportError(f'{e}\nBuild source code in ext/assoc_rs')
-import numpy as np   
+# from assoc_rs import glmf32,lmm_reml_chunk_f32
+import numpy as np
+from assoc_rs import glmf32, lmm_reml_chunk_f32
 
 
 def FEM(y:np.ndarray,X:np.ndarray,M:np.ndarray,chunksize:int=50_000,threads:int=1,):

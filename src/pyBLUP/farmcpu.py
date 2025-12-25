@@ -229,7 +229,7 @@ def farmcpu(y:np.ndarray=None,M:np.ndarray=None,X:np.ndarray=None,chrlist:np.nda
     nbin = np.array(range(QTNbound//nbin,QTNbound+1,QTNbound//nbin))
     X = np.concatenate([np.ones((y.shape[0],1)),X],axis=1) if X is not None else np.ones((y.shape[0],1))
     QTNidx = np.array([],dtype=int) # init for QTNidx
-    for _ in trange(iter,desc=f'Process of FarmCPU',ascii=True):
+    for _ in trange(iter,desc=f'Process of FarmCPU',ascii=False):
         X_QTN = np.concatenate([X,M[QTNidx].T],axis=1) if QTNidx.size > 0 else X
         FEMresult = FEM(y,X_QTN,M,threads=threads)
         FEMresult[:,2:] = np.nan_to_num(FEMresult[:,2:],nan=1)
@@ -244,7 +244,7 @@ def farmcpu(y:np.ndarray=None,M:np.ndarray=None,X:np.ndarray=None,chrlist:np.nda
                 for n in nbin:
                     combine_list.append((sz,n))
             REMresult = Parallel(threads)(delayed(REM)(sz,n,FEMresult,pos,M,y,X_QTN) for sz,n in combine_list)
-            optcombidx = np.argmin([l for l,idx in REMresult])
+            optcombidx = np.argmin([l for l,_idx in REMresult])
             QTNidx_pre = np.unique(np.concatenate([REMresult[optcombidx][1],QTNidx]))
             keep = SUPER(np.corrcoef(M[QTNidx_pre]),FEMresult[QTNidx_pre])
             QTNidx_pre = QTNidx_pre[keep]

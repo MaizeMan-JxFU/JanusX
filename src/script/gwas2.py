@@ -69,6 +69,14 @@ from ._common.log import setup_logging
 # Basic utilities
 # ======================================================================
 
+def _section(logger, title: str) -> None:
+    """Pretty section separator in log (with a blank line before each section)."""
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
 def fastplot(
     gwasresult: pd.DataFrame,
     phenosub: np.ndarray,
@@ -167,7 +175,7 @@ def build_grm_streaming(
     """
     logger.info(f"Building GRM (streaming), method={method}")
     grm = np.zeros((n_samples, n_samples), dtype="float32")
-    pbar = tqdm(total=n_snps, desc="GRM (streaming)", ascii=True)
+    pbar = tqdm(total=n_snps, desc="GRM (streaming)", ascii=False)
     process = psutil.Process()
 
     varsum = 0.0
@@ -339,8 +347,7 @@ def _load_covariate_for_streaming(
     return cov_all
 
 
-def run_chunked_gwas_lmm_lm(
-    model_name: str,
+def prepare_streaming_context(
     genofile: str,
     phenofile: str,
     pheno_cols: list[int] | None,
@@ -351,28 +358,22 @@ def run_chunked_gwas_lmm_lm(
     mgrm: str,
     pcdim: str,
     cov_path: str | None,
-    plot: bool,
-    threads: int,
     logger,
-) -> None:
+):
     """
-    Run LMM or LM GWAS using a streaming, low-memory pipeline.
-
-    For each trait, this will also report:
-      - wall time
-      - average CPU usage (normalized by number of logical cores)
-      - approximate peak RSS memory usage
+    Prepare all shared resources for streaming LMM/LM once:
+      - phenotype
+      - genotype metadata (ids, n_snps)
+      - GRM + Q (cached)
+      - covariates (optional)
     """
-    # Load phenotype
     pheno = load_phenotype(phenofile, pheno_cols, logger)
 
-    # Inspect genotype (sample IDs, SNP count)
     ids, n_snps = inspect_genotype_file(genofile)
     ids = np.array(ids).astype(str)
     n_samples = len(ids)
     logger.info(f"Genotype meta: {n_samples} samples, {n_snps} SNPs.")
 
-    # Build/load GRM and Q with caching
     grm, eff_m = load_or_build_grm_with_cache(
         genofile=genofile,
         prefix=outprefix,
@@ -382,6 +383,7 @@ def run_chunked_gwas_lmm_lm(
         chunk_size=chunk_size,
         logger=logger,
     )
+
     qmatrix = load_or_build_q_with_cache(
         grm=grm,
         prefix=outprefix,
@@ -389,10 +391,35 @@ def run_chunked_gwas_lmm_lm(
         logger=logger,
     )
 
-    # Optional covariate matrix (aligned with genotype sample order)
     cov_all = _load_covariate_for_streaming(cov_path, n_samples, logger)
 
-    # Choose slim model class
+    return pheno, ids, n_snps, grm, qmatrix, cov_all, eff_m
+
+
+def run_chunked_gwas_lmm_lm(
+    model_name: str,
+    genofile: str,
+    pheno: pd.DataFrame,
+    ids: np.ndarray,
+    n_snps: int,
+    outprefix: str,
+    maf_threshold: float,
+    max_missing_rate: float,
+    chunk_size: int,
+    grm: np.ndarray,
+    qmatrix: np.ndarray,
+    cov_all: np.ndarray | None,
+    eff_m: int,
+    plot: bool,
+    threads: int,
+    logger,
+) -> None:
+    """
+    Run LMM or LM GWAS using a streaming, low-memory pipeline.
+
+    Important: This function assumes pheno/ids/grm/q/cov have already been prepared
+    once (no repeated "Loading phenotype" / "Loading GRM/Q" logs).
+    """
     model_map = {"lmm": slim.LMM, "lm": slim.LM}
     ModelCls = model_map[model_name]
 
@@ -400,10 +427,8 @@ def run_chunked_gwas_lmm_lm(
     n_cores = psutil.cpu_count(logical=True) or cpu_count()
 
     for pname in pheno.columns:
-        logger.info("*" * 60)
         logger.info(f"Streaming {model_name.upper()} GWAS for trait: {pname}")
 
-        # --- trait-level resource baseline ---
         cpu_t0 = process.cpu_times()
         rss0 = process.memory_info().rss
         t0 = time.time()
@@ -413,8 +438,7 @@ def run_chunked_gwas_lmm_lm(
         sameidx = np.isin(ids, pheno_sub.index)
         if np.sum(sameidx) == 0:
             logger.info(
-                f"No overlapping samples between genotype and phenotype {pname}. "
-                "Skipped."
+                f"No overlapping samples between genotype and phenotype {pname}. Skipped."
             )
             continue
 
@@ -428,24 +452,19 @@ def run_chunked_gwas_lmm_lm(
         if model_name == "lmm":
             mod = ModelCls(y=y_vec, X=X_cov, kinship=grm[sameidx][:, sameidx])
             logger.info(
-                f"Samples: {np.sum(sameidx)}, Total SNPs: {eff_m}, "
-                f"PVE(null): {round(mod.pve, 3)}"
+                f"Samples: {np.sum(sameidx)}, Total SNPs: {eff_m}, PVE(null): {round(mod.pve, 3)}"
             )
         else:
             mod = ModelCls(y=y_vec, X=X_cov)
-            logger.info(
-                f"Samples: {np.sum(sameidx)}, Total SNPs: {eff_m}"
-            )
+            logger.info(f"Samples: {np.sum(sameidx)}, Total SNPs: {eff_m}")
 
         results_chunks = []
         info_chunks = []
         maf_list = []
         done_snps = 0
 
-        # prime cpu_percent (first call usually returns 0.0)
         process.cpu_percent(interval=None)
-
-        pbar = tqdm(total=n_snps, desc=f"{model_name}-{pname}", ascii=True)
+        pbar = tqdm(total=n_snps, desc=f"{model_name}-{pname}", ascii=False)
 
         for genosub, sites in load_genotype_chunks(
             genofile,
@@ -456,7 +475,6 @@ def run_chunked_gwas_lmm_lm(
             genosub = genosub[:, sameidx]  # (m_chunk, n_use)
             maf_list.extend(np.mean(genosub, axis=1) / 2)
 
-            # slim.*.gwas returns [beta, se, p]
             results_chunks.append(mod.gwas(genosub, threads=threads))
             info_chunks.extend(
                 [[s.chrom, s.pos, s.ref_allele, s.alt_allele] for s in sites]
@@ -466,21 +484,16 @@ def run_chunked_gwas_lmm_lm(
             done_snps += m_chunk
             pbar.update(m_chunk)
 
-            # sample memory & CPU for this trait
             mem_info = process.memory_info()
             peak_rss = max(peak_rss, mem_info.rss)
-            # only show memory in tqdm to avoid clutter
             if done_snps % (10 * chunk_size) == 0:
                 mem_gb = mem_info.rss / 1024**3
                 pbar.set_postfix(memory=f"{mem_gb:.2f} GB")
 
-        # force bar to 100%
         pbar.n = pbar.total
         pbar.refresh()
         pbar.close()
-        logger.info(f"Effective SNP: {done_snps}")
 
-        # --- trait-level resource summary ---
         cpu_t1 = process.cpu_times()
         rss1 = process.memory_info().rss
         t1 = time.time()
@@ -490,15 +503,12 @@ def run_chunked_gwas_lmm_lm(
         sys_cpu = cpu_t1.system - cpu_t0.system
         total_cpu = user_cpu + sys_cpu
 
-        if wall > 0:
-            avg_cpu_pct = 100.0 * total_cpu / wall / (n_cores or 1)
-        else:
-            avg_cpu_pct = 0.0
-
+        avg_cpu_pct = 100.0 * total_cpu / wall / (n_cores or 1) if wall > 0 else 0.0
         avg_rss_gb = (rss0 + rss1) / 2 / 1024**3
         peak_rss_gb = peak_rss / 1024**3
 
         logger.info(
+            f"Effective SNP: {done_snps} | "
             f"Resource usage for {model_name.upper()} / {pname}: "
             f"wall={wall:.2f} s, "
             f"avg CPU={avg_cpu_pct:.1f}% of {n_cores} cores, "
@@ -537,6 +547,7 @@ def run_chunked_gwas_lmm_lm(
         out_tsv = f"{outprefix}.{pname}.{model_name}.tsv"
         df.to_csv(out_tsv, sep="\t", float_format="%.4f", index=None)
         logger.info(f"Saved {model_name.upper()} results to {out_tsv}".replace("//", "/"))
+        logger.info("")  # ensure blank line between traits
 
 
 # ======================================================================
@@ -587,13 +598,11 @@ def build_qmatrix_farmcpu(
     geno: np.ndarray,
     qdim: str,
     cov_path: str | None,
-    ref_alt: pd.DataFrame,
     logger,
 ) -> np.ndarray:
     """
     Build or load Q matrix for FarmCPU (PCs + optional covariates).
     """
-    # PCA-based Q matrix
     if qdim in np.arange(0, 30).astype(str):
         q_path = f"{gfile_prefix}.q.{qdim}.txt"
         if os.path.exists(q_path):
@@ -611,7 +620,6 @@ def build_qmatrix_farmcpu(
         logger.info(f"* Loading Q matrix from {qdim}...")
         qmatrix = np.genfromtxt(qdim)
 
-    # Additional covariate file
     if cov_path:
         cov_arr = np.genfromtxt(cov_path, dtype=float)
         if cov_arr.ndim == 1:
@@ -632,9 +640,13 @@ def run_farmcpu_fullmem(
     gfile: str,
     prefix: str,
     logger,
+    pheno_preloaded: pd.DataFrame | None = None,
 ) -> None:
     """
     Run FarmCPU in high-memory mode (full genotype + QK + PCA).
+
+    If pheno_preloaded is provided, it will reuse that phenotype table to avoid
+    repeated "Loading phenotype ..." logs and repeated I/O.
     """
     t_loading = time.time()
     phenofile = args.pheno
@@ -643,52 +655,44 @@ def run_farmcpu_fullmem(
     cov = args.cov
 
     logger.info("* FarmCPU pipeline: loading genotype and phenotype")
-    pheno = load_phenotype(phenofile, args.ncol, logger)
+    pheno = pheno_preloaded if pheno_preloaded is not None else load_phenotype(
+        phenofile, args.ncol, logger
+    )
 
     ref_alt, famid, geno = load_genotype_full(args, gfile, logger)
     logger.info(
         f"Genotype and phenotype loaded in {(time.time() - t_loading):.2f} seconds"
     )
 
-    # Filter SNPs and impute
     geno, ref_alt, qkmodel = prepare_qk_and_filter(geno, ref_alt, logger)
-
     assert geno.size > 0, "After filtering, number of SNPs is zero for FarmCPU."
 
     gfile_prefix = gfile.replace(".vcf", "").replace(".gz", "")
 
-    # Build/load Q for FarmCPU (including --cov if provided)
     qmatrix = build_qmatrix_farmcpu(
         gfile_prefix=gfile_prefix,
         qkmodel=qkmodel,
         geno=geno,
         qdim=qdim,
         cov_path=cov,
-        ref_alt=ref_alt,
         logger=logger,
     )
 
-    # Run FarmCPU per phenotype
     for phename in pheno.columns:
-        logger.info("*" * 60)
         logger.info(f"* FarmCPU GWAS for trait: {phename}")
         t_trait = time.time()
 
         p = pheno[phename].dropna()
         famidretain = np.isin(famid, p.index)
         if np.sum(famidretain) == 0:
-            logger.info(
-                f"Trait {phename}: no overlapping samples, skipped."
-            )
+            logger.info(f"Trait {phename}: no overlapping samples, skipped.")
             continue
 
         snp_sub = geno[:, famidretain]
         p_sub = p.loc[famid[famidretain]].values.reshape(-1, 1)
         q_sub = qmatrix[famidretain]
 
-        logger.info(
-            f"Samples: {np.sum(famidretain)}, SNPs: {snp_sub.shape[0]}"
-        )
+        logger.info(f"Samples: {np.sum(famidretain)}, SNPs: {snp_sub.shape[0]}")
         res = farmcpu(
             y=p_sub,
             M=snp_sub,
@@ -698,9 +702,7 @@ def run_farmcpu_fullmem(
             iter=20,
             threads=args.thread,
         )
-        res_df = pd.DataFrame(
-            res, columns=["beta", "se", "p"], index=ref_alt.index
-        )
+        res_df = pd.DataFrame(res, columns=["beta", "se", "p"], index=ref_alt.index)
         res_df = pd.concat([ref_alt, res_df], axis=1)
         res_df = res_df.reset_index()
 
@@ -716,10 +718,9 @@ def run_farmcpu_fullmem(
         res_df.loc[:, "p"] = res_df["p"].map(lambda x: f"{x:.4e}")
         out_tsv = f"{outfolder}/{prefix}.{phename}.farmcpu.tsv"
         res_df.to_csv(out_tsv, sep="\t", float_format="%.4f", index=None)
-        logger.info(
-            f"FarmCPU results saved to {out_tsv}".replace("//", "/")
-        )
+        logger.info(f"FarmCPU results saved to {out_tsv}".replace("//", "/"))
         logger.info(f"Trait {phename} finished in {time.time() - t_trait:.2f} s")
+        logger.info("")
 
 
 # ======================================================================
@@ -732,7 +733,6 @@ def parse_args():
         epilog=__doc__,
     )
 
-    # Required arguments
     required_group = parser.add_argument_group("Required arguments")
 
     geno_group = required_group.add_mutually_exclusive_group(required=True)
@@ -751,7 +751,6 @@ def parse_args():
         help="Phenotype file (tab-delimited, sample IDs in the first column)",
     )
 
-    # Model selection
     models_group = parser.add_argument_group("Model Arguments")
     models_group.add_argument(
         "-lmm", "--lmm", action="store_true", default=False,
@@ -769,7 +768,6 @@ def parse_args():
              "(default: %(default)s)",
     )
 
-    # Optional arguments
     optional_group = parser.add_argument_group("Optional Arguments")
     optional_group.add_argument(
         "-n", "--ncol", action="extend", nargs="*",
@@ -827,14 +825,11 @@ def main(log: bool = True):
     t_start = time.time()
     args = parse_args()
 
-    # Threads
     if args.thread <= 0:
         args.thread = cpu_count()
 
-    # Genotype source & prefix
     gfile, prefix = determine_genotype_source(args)
 
-    # Output directory & logger
     os.makedirs(args.out, 0o755, exist_ok=True)
     outprefix = f"{args.out}/{prefix}".replace("\\", "/").replace("//", "/")
     log_path = f"{outprefix}.gwas.log"
@@ -868,63 +863,93 @@ def main(log: bool = True):
         logger.info(f"Output prefix:    {outprefix}")
         logger.info("*" * 60 + "\n")
 
-    # Sanity checks
     try:
         assert os.path.isfile(args.pheno), f"Cannot find phenotype file {args.pheno}"
         grm_is_valid = args.grm in ["1", "2"] or os.path.isfile(args.grm)
         q_is_valid = args.qcov in np.arange(0, 30).astype(str) or os.path.isfile(args.qcov)
         assert grm_is_valid, f"{args.grm} is neither GRM method nor an existing GRM file."
         assert q_is_valid, f"{args.qcov} is neither PC dimension nor Q matrix file."
-        assert args.cov is None or os.path.isfile(args.cov), (
-            f"Covariate file {args.cov} does not exist."
-        )
-        assert (args.lm or args.lmm or args.farmcpu), \
-            "No model selected. Use -lm, -lmm, and/or -farmcpu."
+        assert args.cov is None or os.path.isfile(args.cov), f"Covariate file {args.cov} does not exist."
+        assert (args.lm or args.lmm or args.farmcpu), "No model selected. Use -lm, -lmm, and/or -farmcpu."
 
-        # LMM / LM: streaming implementation
+        # --- prepare streaming context once if needed ---
+        pheno = None
+        ids = None
+        n_snps = None
+        grm = None
+        qmatrix = None
+        cov_all = None
+        eff_m = None
+
+        if args.lmm or args.lm:
+            _section(logger, "Prepare streaming context (phenotype/genotype meta/GRM/Q/cov)")
+            pheno, ids, n_snps, grm, qmatrix, cov_all, eff_m = prepare_streaming_context(
+                genofile=gfile,
+                phenofile=args.pheno,
+                pheno_cols=args.ncol,
+                outprefix=outprefix,
+                maf_threshold=0.01,
+                max_missing_rate=0.05,
+                chunk_size=args.chunksize,
+                mgrm=args.grm,
+                pcdim=args.qcov,
+                cov_path=args.cov,
+                logger=logger,
+            )
+
+        # --- run streaming LMM ---
         if args.lmm:
+            _section(logger, "Run streaming LMM")
             run_chunked_gwas_lmm_lm(
                 model_name="lmm",
                 genofile=gfile,
-                phenofile=args.pheno,
-                pheno_cols=args.ncol,
+                pheno=pheno,
+                ids=ids,
+                n_snps=n_snps,
                 outprefix=outprefix,
                 maf_threshold=0.01,
                 max_missing_rate=0.05,
                 chunk_size=args.chunksize,
-                mgrm=args.grm,
-                pcdim=args.qcov,
-                cov_path=args.cov,
+                grm=grm,
+                qmatrix=qmatrix,
+                cov_all=cov_all,
+                eff_m=eff_m,
                 plot=args.plot,
                 threads=args.thread,
                 logger=logger,
             )
 
+        # --- run streaming LM ---
         if args.lm:
+            _section(logger, "Run streaming LM")
             run_chunked_gwas_lmm_lm(
                 model_name="lm",
                 genofile=gfile,
-                phenofile=args.pheno,
-                pheno_cols=args.ncol,
+                pheno=pheno,
+                ids=ids,
+                n_snps=n_snps,
                 outprefix=outprefix,
                 maf_threshold=0.01,
                 max_missing_rate=0.05,
                 chunk_size=args.chunksize,
-                mgrm=args.grm,
-                pcdim=args.qcov,
-                cov_path=args.cov,
+                grm=grm,  # LM 不用 kinship，但函数签名统一，传入无妨
+                qmatrix=qmatrix,
+                cov_all=cov_all,
+                eff_m=eff_m,
                 plot=args.plot,
                 threads=args.thread,
                 logger=logger,
             )
 
-        # FarmCPU uses high-memory pipeline (full genotype)
+        # --- run FarmCPU (full memory) ---
         if args.farmcpu:
+            _section(logger, "Run FarmCPU (full memory)")
             run_farmcpu_fullmem(
                 args=args,
                 gfile=gfile,
                 prefix=prefix,
                 logger=logger,
+                pheno_preloaded=pheno,  # 若 streaming 已加载 pheno，则复用，避免重复 log
             )
 
     except Exception as e:

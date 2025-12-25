@@ -1,11 +1,11 @@
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 
 use flate2::read::MultiGzDecoder;
 use memmap2::Mmap;
 use ndarray::Array2;
-use numpy::{IntoPyArray, PyArray2};
+use numpy::{IntoPyArray, PyArray2, PyReadonlyArray2};
 use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::Bound;
@@ -509,6 +509,252 @@ impl VcfChunkReader {
     }
 }
 
+/// =======================
+///   写出：PLINK / VCF（流式，int8，-9 缺失）
+///   geno shape: (n_samples, n_snps)
+/// =======================
+
+#[inline]
+fn plink2bits_from_g_i8(g: i8) -> u8 {
+    // PLINK bed 2-bit:
+    // 00=A1/A1, 10=het, 11=A2/A2, 01=missing
+    match g {
+        0 => 0b00,
+        1 => 0b10,
+        2 => 0b11,
+        _ => 0b01,
+    }
+}
+
+fn write_bed_from_samples_major_stream_i8(
+    path: &Path,
+    geno: &PyReadonlyArray2<i8>, // (n_samples, n_snps)
+) -> Result<(), String> {
+    let arr = geno.as_array();
+    let shape = arr.shape();
+    if shape.len() != 2 {
+        return Err("geno must be 2D (n_samples, n_snps)".to_string());
+    }
+    let n_samples = shape[0];
+    let n_snps = shape[1];
+
+    // ndarray strides are in #elements
+    let strides = arr.strides();
+    let s0 = strides[0] as isize;
+    let s1 = strides[1] as isize;
+    let base = arr.as_ptr(); // *const i8
+
+    let mut w = BufWriter::new(File::create(path).map_err(|e| e.to_string())?);
+
+    // PLINK bed header: 6C 1B 01 (SNP-major)
+    w.write_all(&[0x6C, 0x1B, 0x01]).map_err(|e| e.to_string())?;
+
+    unsafe {
+        for snp in 0..n_snps {
+            let snp_off = (snp as isize) * s1;
+            let mut i = 0usize;
+            while i < n_samples {
+                let mut byte: u8 = 0;
+                for k in 0..4 {
+                    let si = i + k;
+                    let two = if si < n_samples {
+                        let off = (si as isize) * s0 + snp_off;
+                        let g = *base.offset(off);
+                        plink2bits_from_g_i8(g)
+                    } else {
+                        0b01 // padding missing
+                    };
+                    byte |= two << (k * 2);
+                }
+                w.write_all(&[byte]).map_err(|e| e.to_string())?;
+                i += 4;
+            }
+        }
+    }
+
+    w.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn write_bim_from_sites(
+    path: &Path,
+    sites: &[SiteInfo],
+) -> Result<(), String> {
+    let mut w = BufWriter::new(File::create(path).map_err(|e| e.to_string())?);
+    for (_i, s) in sites.iter().enumerate() {
+        // BIM: CHR SNPID GD BP A1 A2
+        // 这里 SNPID 用 chrom:pos（你也可以改成 rsid 列表输入）
+        let snp_id = format!("{}:{}", s.chrom, s.pos);
+        writeln!(
+            w,
+            "{}\t{}\t0\t{}\t{}\t{}",
+            s.chrom, snp_id, s.pos, s.ref_allele, s.alt_allele
+        ).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn write_fam_simple(
+    path: &Path,
+    sample_ids: &[String],
+    phenotype: Option<&[f64]>,
+) -> Result<(), String> {
+    let mut w = BufWriter::new(File::create(path).map_err(|e| e.to_string())?);
+    for (i, sid) in sample_ids.iter().enumerate() {
+        let ph = phenotype.map(|p| p[i]).unwrap_or(-9.0);
+        // FID IID PID MID SEX PHENO
+        writeln!(w, "{0}\t{0}\t0\t0\t1\t{1}", sid, ph).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[inline]
+fn vcf_gt_from_g_i8(g: i8) -> &'static str {
+    match g {
+        0 => "0/0",
+        1 => "0/1",
+        2 => "1/1",
+        _ => "./.",
+    }
+}
+
+fn write_vcf_from_samples_major_stream_i8(
+    path: &Path,
+    geno: &PyReadonlyArray2<i8>, // (n_samples, n_snps)
+    sites: &[SiteInfo],
+    sample_ids: &[String],
+) -> Result<(), String> {
+    let arr = geno.as_array();
+    let shape = arr.shape();
+    if shape.len() != 2 {
+        return Err("geno must be 2D (n_samples, n_snps)".to_string());
+    }
+    let n_samples = shape[0];
+    let n_snps = shape[1];
+
+    if sites.len() != n_snps {
+        return Err(format!("sites length mismatch: sites={}, n_snps={}", sites.len(), n_snps));
+    }
+    if sample_ids.len() != n_samples {
+        return Err(format!("sample_ids length mismatch: sample_ids={}, n_samples={}", sample_ids.len(), n_samples));
+    }
+
+    let strides = arr.strides();
+    let s0 = strides[0] as isize;
+    let s1 = strides[1] as isize;
+    let base = arr.as_ptr(); // *const i8
+
+    let mut w = BufWriter::new(File::create(path).map_err(|e| e.to_string())?);
+
+    writeln!(w, "##fileformat=VCFv4.2").map_err(|e| e.to_string())?;
+    writeln!(w, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">")
+        .map_err(|e| e.to_string())?;
+
+    write!(w, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT")
+        .map_err(|e| e.to_string())?;
+    for sid in sample_ids {
+        write!(w, "\t{}", sid).map_err(|e| e.to_string())?;
+    }
+    writeln!(w).map_err(|e| e.to_string())?;
+
+    unsafe {
+        for snp in 0..n_snps {
+            let s = &sites[snp];
+            let snp_id = format!("{}:{}", s.chrom, s.pos);
+            write!(
+                w,
+                "{}\t{}\t{}\t{}\t{}\t.\tPASS\t.\tGT",
+                s.chrom, s.pos, snp_id, s.ref_allele, s.alt_allele
+            ).map_err(|e| e.to_string())?;
+
+            let snp_off = (snp as isize) * s1;
+            for i in 0..n_samples {
+                let off = (i as isize) * s0 + snp_off;
+                let g = *base.offset(off);
+                write!(w, "\t{}", vcf_gt_from_g_i8(g)).map_err(|e| e.to_string())?;
+            }
+            writeln!(w).map_err(|e| e.to_string())?;
+        }
+    }
+
+    w.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Python: save_plink_stream(prefix, geno, sites, sample_ids, phenotype=None)
+#[pyfunction]
+fn save_plink_stream(
+    prefix: String,
+    geno: PyReadonlyArray2<i8>,   // (n_samples, n_snps), int8, -9 missing
+    sites: Vec<SiteInfo>,         // len = n_snps
+    sample_ids: Vec<String>,      // len = n_samples
+    phenotype: Option<Vec<f64>>,  // len = n_samples
+) -> PyResult<()> {
+    let arr = geno.as_array();
+    let shape = arr.shape();
+    if shape.len() != 2 {
+        return Err(PyErr::new::<PyValueError, _>("geno must be 2D (n_samples, n_snps)"));
+    }
+    let n_samples = shape[0];
+    let n_snps = shape[1];
+
+    if sites.len() != n_snps {
+        return Err(PyErr::new::<PyValueError, _>(format!(
+            "sites length mismatch: sites={}, n_snps={}", sites.len(), n_snps
+        )));
+    }
+    if sample_ids.len() != n_samples {
+        return Err(PyErr::new::<PyValueError, _>(format!(
+            "sample_ids length mismatch: sample_ids={}, n_samples={}", sample_ids.len(), n_samples
+        )));
+    }
+    if let Some(ref p) = phenotype {
+        if p.len() != n_samples {
+            return Err(PyErr::new::<PyValueError, _>(format!(
+                "phenotype length mismatch: phenotype={}, n_samples={}", p.len(), n_samples
+            )));
+        }
+    }
+
+    let bed_path = format!("{prefix}.bed");
+    let bim_path = format!("{prefix}.bim");
+    let fam_path = format!("{prefix}.fam");
+
+    let bed = Path::new(&bed_path);
+    let bim = Path::new(&bim_path);
+    let fam = Path::new(&fam_path);
+
+    write_bed_from_samples_major_stream_i8(bed, &geno)
+        .map_err(|e| PyErr::new::<PyIOError, _>(e))?;
+    write_bim_from_sites(bim, &sites)
+        .map_err(|e| PyErr::new::<PyIOError, _>(e))?;
+    let ph_ref = phenotype.as_ref().map(|v| v.as_slice());
+    write_fam_simple(fam, &sample_ids, ph_ref)
+        .map_err(|e| PyErr::new::<PyIOError, _>(e))?;
+
+    Ok(())
+}
+
+/// Python: save_vcf_stream(path, geno, sites, sample_ids)
+#[pyfunction]
+fn save_vcf_stream(
+    path: String,
+    geno: PyReadonlyArray2<i8>,   // (n_samples, n_snps), int8, -9 missing
+    sites: Vec<SiteInfo>,         // len = n_snps
+    sample_ids: Vec<String>,      // len = n_samples
+) -> PyResult<()> {
+    let arr = geno.as_array();
+    let shape = arr.shape();
+    if shape.len() != 2 {
+        return Err(PyErr::new::<PyValueError, _>("geno must be 2D (n_samples, n_snps)"));
+    }
+
+    write_vcf_from_samples_major_stream_i8(Path::new(&path), &geno, &sites, &sample_ids)
+        .map_err(|e| PyErr::new::<PyIOError, _>(e))?;
+
+    Ok(())
+}
+
 /// Count variant records (non-header lines) in a VCF/VCF.GZ file.
 ///
 /// Header lines start with '#', variant records do not.
@@ -516,7 +762,6 @@ impl VcfChunkReader {
 /// compared to downstream GWAS computations.
 #[pyfunction]
 fn count_vcf_snps(path: String) -> PyResult<usize> {
-    use std::io::Read; // 其实 BufRead 已经在上面引入，这行可要可不要
 
     let p = Path::new(&path);
     let mut reader = open_text_maybe_gz(p)
@@ -549,5 +794,7 @@ fn gfreader_rs(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<BedChunkReader>()?;
     m.add_class::<VcfChunkReader>()?;
     m.add_function(wrap_pyfunction!(count_vcf_snps, m)?)?;
+    m.add_function(wrap_pyfunction!(save_plink_stream, m)?)?;
+    m.add_function(wrap_pyfunction!(save_vcf_stream, m)?)?;
     Ok(())
 }
