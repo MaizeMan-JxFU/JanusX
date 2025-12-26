@@ -27,7 +27,6 @@ Type conventions
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np
@@ -293,13 +292,8 @@ class LMM:
         )
 
         # Eigen decomposition of kinship (stabilized)
-        val, vec = np.linalg.eigh(kinship + 1e-6 * np.eye(y.shape[0]))
-        idx = np.argsort(val)[::-1]
-        val, vec = val[idx], vec[:, idx]
-
-        # Store eigenvalues and U^T
-        self.S = val
-        self.Dh = vec.T.astype(np.float32, copy=False)
+        self.S, self.Dh = np.linalg.eigh(kinship + 1e-6 * np.eye(y.shape[0]))
+        self.Dh = self.Dh.T
 
         # Drop kinship to save memory
         del kinship
@@ -361,7 +355,7 @@ class LMM:
             beta = np.linalg.solve(XTV_invX, XTV_invy)
             r = self.y - X_cov @ beta
 
-            rTV_invr = (V_inv * (r.T @ r))[0, 0]
+            rTV_invr = (V_inv * r.T @ r)[0, 0]
             log_detV = np.sum(np.log(V))
 
             sign, log_detXTV_invX = np.linalg.slogdet(XTV_invX)

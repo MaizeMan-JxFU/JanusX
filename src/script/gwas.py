@@ -227,7 +227,7 @@ def load_or_build_grm_with_cache(
     maf_threshold: float,
     max_missing_rate: float,
     chunk_size: int,
-    logger,
+    logger:logging.Logger,
 ) -> tuple[np.ndarray, int]:
     """
     Load or build a GRM with caching for streaming LMM/LM runs.
@@ -237,10 +237,10 @@ def load_or_build_grm_with_cache(
     method_is_builtin = mgrm in ["1", "2"]
 
     if method_is_builtin:
-        km_path = f"{prefix}.k.{mgrm}.txt"
-        if os.path.exists(km_path):
-            logger.info(f"Loading cached GRM from {km_path}...")
-            grm = np.genfromtxt(km_path,dtype='float32')
+        km_path = f"{prefix}.k.{mgrm}"
+        if os.path.exists(f'{km_path}.npy'):
+            logger.info(f"Loading cached GRM from {km_path}.npy...")
+            grm = np.load(f'{km_path}.npy',mmap_mode='r')
             grm = grm.reshape(n_samples, n_samples)
             eff_m = n_snps  # approximate; exact effective M not critical here
         else:
@@ -255,8 +255,9 @@ def load_or_build_grm_with_cache(
                 method=method_int,
                 logger=logger,
             )
-            np.savetxt(km_path, grm, fmt="%.6f")
-            logger.info(f"Cached GRM written to {km_path}")
+            np.save(f'{km_path}.npy', grm)
+            grm = np.load(f'{km_path}.npy',mmap_mode='r')
+            logger.info(f"Cached GRM written to {km_path}.npy")
     else:
         assert os.path.isfile(mgrm), f"GRM file not found: {mgrm}"
         logger.info(f"Loading GRM from {mgrm}...")
@@ -271,15 +272,13 @@ def load_or_build_grm_with_cache(
     return grm, eff_m
 
 
-def build_pcs_from_grm(grm: np.ndarray, dim: int, logger) -> np.ndarray:
+def build_pcs_from_grm(grm: np.ndarray, dim: int, logger: logging.Logger) -> np.ndarray:
     """
     Compute leading principal components from GRM.
     """
     logger.info(f"Computing top {dim} PCs from GRM...")
-    eigval, eigvec = np.linalg.eigh(grm)
-    idx = np.argsort(eigval)[::-1]
-    eigvec = eigvec[:, idx]
-    pcs = eigvec[:, :dim]
+    _, eigvec = np.linalg.eigh(grm)
+    pcs = eigvec[:, -dim:]
     logger.info("PC computation finished.")
     return pcs
 
@@ -445,14 +444,14 @@ def run_chunked_gwas_lmm_lm(
             continue
 
         y_vec = pheno_sub.loc[ids[sameidx]].values
-
         # Build covariate matrix X_cov for this trait
         X_cov = qmatrix[sameidx]
         if cov_all is not None:
             X_cov = np.concatenate([X_cov, cov_all[sameidx]], axis=1)
 
         if model_name == "lmm":
-            mod = ModelCls(y=y_vec, X=X_cov, kinship=grm[sameidx][:, sameidx])
+            Ksub = grm[np.ix_(sameidx, sameidx)]
+            mod = ModelCls(y=y_vec, X=X_cov, kinship=Ksub)
             logger.info(
                 f"Samples: {np.sum(sameidx)}, Total SNPs: {eff_m}, PVE(null): {round(mod.pve, 3)}"
             )
