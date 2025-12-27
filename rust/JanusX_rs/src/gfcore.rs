@@ -196,6 +196,44 @@ impl BedSnpIter {
         })
     }
 
+    pub fn n_snps(&self) -> usize { self.n_snps }
+
+    /// 随机访问解码某个 SNP（用于并行）
+    pub fn get_snp_row(&self, snp_idx: usize) -> Option<(Vec<f32>, SiteInfo)> {
+        if snp_idx >= self.n_snps { return None; }
+        let data = &self.mmap[3..];
+
+        let offset = snp_idx * self.bytes_per_snp;
+        let snp_bytes = &data[offset..offset + self.bytes_per_snp];
+
+        let mut row: Vec<f32> = vec![-9.0; self.n_samples];
+
+        for (byte_idx, byte) in snp_bytes.iter().enumerate() {
+            for within in 0..4 {
+                let samp_idx = byte_idx * 4 + within;
+                if samp_idx >= self.n_samples { break; }
+                let code = (byte >> (within * 2)) & 0b11;
+                row[samp_idx] = match code {
+                    0b00 => 0.0,
+                    0b10 => 1.0,
+                    0b11 => 2.0,
+                    0b01 => -9.0,
+                    _ => -9.0,
+                };
+            }
+        }
+
+        let mut site = self.sites[snp_idx].clone();
+        let keep = crate::gfcore::process_snp_row(
+            &mut row,
+            &mut site.ref_allele,
+            &mut site.alt_allele,
+            self.maf,
+            self.miss,
+        );
+        if keep { Some((row, site)) } else { None }
+    }
+
     pub fn n_samples(&self) -> usize { self.n_samples }
 
     pub fn next_snp(&mut self) -> Option<(Vec<f32>, SiteInfo)> {
