@@ -27,6 +27,7 @@ Type conventions
 
 from __future__ import annotations
 
+import time
 from typing import Optional, Tuple
 
 import numpy as np
@@ -294,8 +295,10 @@ class LMM:
 
         # Eigen decomposition of kinship (stabilized)
         kinship.flat[::kinship.shape[0]+1] += 1e-6
+        print('Start Eigen-Decomposition...')
+        t_start = time.time()
         self.S, self.Dh = eigh(kinship, overwrite_a=True, check_finite=False)
-
+        print(f'EVD cost {(time.time()-t_start):.2f} secs')
         # Drop kinship to save memory
         del kinship
         self.Dh = self.Dh.T.astype('float32')
