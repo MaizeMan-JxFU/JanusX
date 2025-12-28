@@ -10,7 +10,7 @@ warnings.filterwarnings(
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.backends.backend_pdf # pdf support
-from script import gwas,gs,postGWAS,grm,pca,sim
+from script import gwas,gs,postGWAS,grm,pca,sim,lm,lmm,farmcpu
 
 __logo__ = r'''
        _                      __   __
@@ -23,20 +23,17 @@ __logo__ = r'''
 __version__ = 'JanusX v1.0.1'
 
 def main():
-    module = dict(zip(['gwas','gs','postGWAS','grm','pca','sim'],
-                      [gwas,gs,postGWAS,grm,pca,sim]))
-    extmodule = {}
+    module = dict(zip(['gwas','lm','lmm','farmcpu','postGWAS','grm','pca','gs','sim'],
+                      [gwas,lm,lmm,farmcpu,postGWAS,grm,pca,gs,sim]))
     print(__logo__)
     if len(sys.argv)>1:
         if sys.argv[1] == '-h' or sys.argv[1] == '--help':
             print('Usage: jx <module> [parameter]')
             print(f'''Modules: {' '.join(module.keys())}''')
-            print(f'''extModules: {' '.join(extmodule.keys())}''')
         elif sys.argv[1] == '-v' or sys.argv[1] == '--version':
             print(__version__)
         else:
             module_name = sys.argv[1]
-            module.update(extmodule)
             if sys.argv[1] in module.keys():
                 sys.argv.remove(sys.argv[1])
                 module[module_name].main() # Process of Target Module
@@ -44,11 +41,9 @@ def main():
                 print(f'Unkown module: {sys.argv[1]}')
                 print(f'Usage: {sys.argv[0]} <module> [parameter]')
                 print(f'''Modules: {' '.join(module.keys())}''')
-                print(f'''extModules: {' '.join(extmodule.keys())}''')
     else:
         print(f'Usage: {sys.argv[0]} <module> [parameter]')
         print(f'''Modules: {' '.join(module.keys())}''')
-        print(f'''extModules: {' '.join(extmodule.keys())}''')
 
 if __name__ == "__main__":
     main()
