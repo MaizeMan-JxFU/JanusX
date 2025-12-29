@@ -62,7 +62,7 @@ from JanusX.bioplotkit import GWASPLOT
 from JanusX.pyBLUP import QK
 from JanusX.gfreader import breader, vcfreader
 from JanusX.gfreader import load_genotype_chunks, inspect_genotype_file
-from JanusX.pyBLUP import LMM, LM, farmcpu
+from JanusX.pyBLUP import LMM, LM, FastLMM, farmcpu
 from ._common.log import setup_logging
 
 
@@ -438,14 +438,17 @@ def run_chunked_gwas_lmm_lm(
     Important: This function assumes pheno/ids/grm/q/cov have already been prepared
     once (no repeated "Loading phenotype" / "Loading GRM/Q" logs).
     """
-    model_map = {"lmm": LMM, "lm": LM}
-    ModelCls = model_map[model_name]
+    model_map = {"lmm": LMM, "lm": LM, "fastlmm": FastLMM}
+    model_key = model_name.lower()
+    ModelCls = model_map[model_key]
+    model_label = {"lmm": "LMM", "lm": "LM", "fastlmm": "fastLMM"}[model_key]
+    model_tag = model_key
 
     process = psutil.Process()
     n_cores = psutil.cpu_count(logical=True) or cpu_count()
 
     for pname in pheno.columns:
-        logger.info(f"Streaming {model_name.upper()} GWAS for trait: {pname}")
+        logger.info(f"Streaming {model_label} GWAS for trait: {pname}")
 
         cpu_t0 = process.cpu_times()
         rss0 = process.memory_info().rss
@@ -466,7 +469,7 @@ def run_chunked_gwas_lmm_lm(
         if cov_all is not None:
             X_cov = np.concatenate([X_cov, cov_all[sameidx]], axis=1)
 
-        if model_name == "lmm":
+        if model_key in ("lmm", "fastlmm"):
             Ksub = grm[np.ix_(sameidx, sameidx)]
             mod = ModelCls(y=y_vec, X=X_cov, kinship=Ksub)
             logger.info(
@@ -482,7 +485,7 @@ def run_chunked_gwas_lmm_lm(
         done_snps = 0
 
         process.cpu_percent(interval=None)
-        pbar = tqdm(total=n_snps, desc=f"{model_name}-{pname}", ascii=False)
+        pbar = tqdm(total=n_snps, desc=f"{model_label}-{pname}", ascii=False)
 
         for genosub, sites in load_genotype_chunks(
             genofile,
@@ -528,7 +531,7 @@ def run_chunked_gwas_lmm_lm(
 
         logger.info(
             f"Effective SNP: {done_snps} | "
-            f"Resource usage for {model_name.upper()} / {pname}: "
+            f"Resource usage for {model_label} / {pname}: "
             f"wall={wall:.2f} s, "
             f"avg CPU={avg_cpu_pct:.1f}% of {n_cores} cores, "
             f"avg RSS={avg_rss_gb:.2f} GB, "
@@ -558,14 +561,14 @@ def run_chunked_gwas_lmm_lm(
                 df,
                 y_vec,
                 xlabel=pname,
-                outpdf=f"{outprefix}.{pname}.{model_name}.svg",
+                outpdf=f"{outprefix}.{pname}.{model_tag}.svg",
             )
 
         df = df.astype({"p": "object"})
         df.loc[:, "p"] = df["p"].map(lambda x: f"{x:.4e}")
-        out_tsv = f"{outprefix}.{pname}.{model_name}.tsv"
+        out_tsv = f"{outprefix}.{pname}.{model_tag}.tsv"
         df.to_csv(out_tsv, sep="\t", float_format="%.4f", index=None)
-        logger.info(f"Saved {model_name.upper()} results to {out_tsv}".replace("//", "/"))
+        logger.info(f"Saved {model_label} results to {out_tsv}".replace("//", "/"))
         logger.info("")  # ensure blank line between traits
 
 
@@ -777,6 +780,11 @@ def parse_args():
              "(default: %(default)s)",
     )
     models_group.add_argument(
+        "-fastlmm", "--fastlmm", action="store_true", default=False,
+        help="Run fast LMM with fixed lambda (low-memory, chunk-based) "
+             "(default: %(default)s)",
+    )
+    models_group.add_argument(
         "-farmcpu", "--farmcpu", action="store_true", default=False,
         help="Run FarmCPU model (high-memory, full genotype) "
              "(default: %(default)s)",
@@ -870,6 +878,7 @@ def main(log: bool = True):
         logger.info(
             f"Models:           "
             f"{'LMM ' if args.lmm else ''}"
+            f"{'fastlmm ' if args.fastlmm else ''}"
             f"{'LM ' if args.lm else ''}"
             f"{'FarmCPU' if args.farmcpu else ''}"
         )
@@ -889,7 +898,9 @@ def main(log: bool = True):
         assert grm_is_valid, f"{args.grm} is neither GRM method nor an existing GRM file."
         assert q_is_valid, f"{args.qcov} is neither PC dimension nor Q matrix file."
         assert args.cov is None or os.path.isfile(args.cov), f"Covariate file {args.cov} does not exist."
-        assert (args.lm or args.lmm or args.farmcpu), "No model selected. Use -lm, -lmm, and/or -farmcpu."
+        assert (args.lm or args.lmm or args.fastlmm or args.farmcpu), (
+            "No model selected. Use -lm, -lmm, -fastlmm, and/or -farmcpu."
+        )
 
         # --- prepare streaming context once if needed ---
         pheno = None
@@ -900,7 +911,7 @@ def main(log: bool = True):
         cov_all = None
         eff_m = None
 
-        if args.lmm or args.lm:
+        if args.lmm or args.lm or args.fastlmm:
             _section(logger, "Prepare streaming context (phenotype/genotype meta/GRM/Q/cov)")
             pheno, ids, n_snps, grm, qmatrix, cov_all, eff_m = prepare_streaming_context(
                 genofile=gfile,
@@ -939,6 +950,27 @@ def main(log: bool = True):
             )
 
         # --- run streaming LM ---
+        if args.fastlmm:
+            _section(logger, "Run streaming fastLMM (fixed lambda)")
+            run_chunked_gwas_lmm_lm(
+                model_name="fastlmm",
+                genofile=gfile,
+                pheno=pheno,
+                ids=ids,
+                n_snps=n_snps,
+                outprefix=outprefix,
+                maf_threshold=0.01,
+                max_missing_rate=0.05,
+                chunk_size=args.chunksize,
+                grm=grm,
+                qmatrix=qmatrix,
+                cov_all=cov_all,
+                eff_m=eff_m,
+                plot=args.plot,
+                threads=args.thread,
+                logger=logger,
+            )
+
         if args.lm:
             _section(logger, "Run streaming LM")
             run_chunked_gwas_lmm_lm(

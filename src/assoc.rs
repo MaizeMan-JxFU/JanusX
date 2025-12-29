@@ -809,3 +809,258 @@ pub fn lmm_reml_chunk_f32<'py>(
 
     Ok((beta_se_p, lambdas))
 }
+
+
+// ------------------------------------------------------------
+// Helpers: Cholesky solve into (no allocation), and dot loops
+// ------------------------------------------------------------
+
+#[inline]
+fn cholesky_solve_into(l: &[f64], dim: usize, b: &[f64], out: &mut [f64]) {
+    debug_assert_eq!(b.len(), dim);
+    debug_assert_eq!(out.len(), dim);
+
+    // forward: L y = b
+    for i in 0..dim {
+        let mut sum = b[i];
+        for k in 0..i {
+            sum -= l[i * dim + k] * out[k];
+        }
+        out[i] = sum / l[i * dim + i];
+    }
+
+    // backward: L^T x = y  (in-place)
+    for ii in 0..dim {
+        let i = dim - 1 - ii;
+        let mut sum = out[i];
+        for k in (i + 1)..dim {
+            sum -= l[k * dim + i] * out[k];
+        }
+        out[i] = sum / l[i * dim + i];
+    }
+}
+
+#[inline]
+fn dot_loop(a: &[f64], b: &[f64]) -> f64 {
+    debug_assert_eq!(a.len(), b.len());
+    let mut s = 0.0;
+    for i in 0..a.len() {
+        s += a[i] * b[i];
+    }
+    s
+}
+
+struct AssocScratch {
+    c: Vec<f64>,       // len p
+    a_inv_c: Vec<f64>, // len p
+}
+impl AssocScratch {
+    fn new(p: usize) -> Self {
+        Self {
+            c: vec![0.0; p],
+            a_inv_c: vec![0.0; p],
+        }
+    }
+    #[inline]
+    fn reset(&mut self) {
+        self.c.fill(0.0);
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (s, xcov, y_rot, log10_lbd, g_rot_chunk, threads=0))]
+pub fn lmm_assoc_chunk_f32<'py>(
+    py: Python<'py>,
+    s: PyReadonlyArray1<'py, f64>,
+    xcov: PyReadonlyArray2<'py, f64>,
+    y_rot: PyReadonlyArray1<'py, f64>,
+    log10_lbd: f64,
+    g_rot_chunk: PyReadonlyArray2<'py, f32>,
+    threads: usize,
+) -> PyResult<Bound<'py, PyArray2<f64>>> {
+    let s = s.as_slice()?;
+    let xcov_arr = xcov.as_array();
+    let y = y_rot.as_slice()?;
+    let g_arr = g_rot_chunk.as_array();
+
+    let n = y.len();
+    let (xc_n, p_cov) = (xcov_arr.shape()[0], xcov_arr.shape()[1]);
+    if xc_n != n {
+        return Err(PyRuntimeError::new_err("Xcov.n_rows must equal len(y_rot)"));
+    }
+    if s.len() != n {
+        return Err(PyRuntimeError::new_err("len(S) must equal len(y_rot)"));
+    }
+    if g_arr.shape()[1] != n {
+        return Err(PyRuntimeError::new_err("g_rot_chunk must be (m, n)"));
+    }
+    if n <= p_cov + 1 {
+        return Err(PyRuntimeError::new_err("n must be > p_cov+1"));
+    }
+
+    let lbd = 10.0_f64.powf(log10_lbd);
+    if !lbd.is_finite() || lbd <= 0.0 {
+        return Err(PyRuntimeError::new_err("invalid log10_lbd"));
+    }
+
+    let m = g_arr.shape()[0];
+    let out = PyArray2::<f64>::zeros_bound(py, [m, 3], false); // beta, se, p
+    let out_slice: &mut [f64] = unsafe {
+        out.as_slice_mut()
+            .map_err(|_| PyRuntimeError::new_err("out not contiguous"))?
+    };
+
+    // Flatten X for faster access
+    let xcov_flat: Vec<f64> = xcov_arr.iter().cloned().collect();
+    let p = p_cov;
+
+    // Build weights W = V^{-1} = 1/(s + lbd)
+    let mut w = vec![0.0_f64; n];
+    for i in 0..n {
+        let vv = s[i] + lbd;
+        if vv <= 0.0 {
+            return Err(PyRuntimeError::new_err("non-positive s[i]+lbd"));
+        }
+        w[i] = 1.0 / vv;
+    }
+
+    // Precompute A = X'WX, b = X'Wy, yWy
+    let mut a = vec![0.0_f64; p * p];
+    let mut b = vec![0.0_f64; p];
+    let mut ywy = 0.0_f64;
+
+    for i in 0..n {
+        let wi = w[i];
+        let yi = y[i];
+        ywy += wi * yi * yi;
+
+        let xi = &xcov_flat[i * p..(i + 1) * p];
+        for r in 0..p {
+            b[r] += wi * xi[r] * yi;
+            for c in 0..=r {
+                a[r * p + c] += wi * xi[r] * xi[c];
+            }
+        }
+    }
+
+    // symmetrize + ridge
+    let ridge = 1e-8;
+    for r in 0..p {
+        a[r * p + r] += ridge;
+        for c in 0..r {
+            let vrc = a[r * p + c];
+            a[c * p + r] = vrc;
+        }
+    }
+
+    // Cholesky(A) in-place; now a stores L
+    if cholesky_inplace(&mut a, p).is_none() {
+        return Err(PyRuntimeError::new_err("X'WX not SPD"));
+    }
+
+    // Solve A^{-1} b once (no-alloc version into tmp)
+    let mut a_inv_b = vec![0.0_f64; p];
+    cholesky_solve_into(&a, p, &b, &mut a_inv_b);
+
+    // b'A^{-1}b is constant
+    let b_aib = dot_loop(&b, &a_inv_b);
+
+    let df = (n as i32) - (p as i32) - 1;
+    if df <= 0 {
+        return Err(PyRuntimeError::new_err("df <= 0"));
+    }
+
+    // Thread pool
+    let pool = if threads > 0 {
+        Some(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .map_err(|e| PyRuntimeError::new_err(format!("rayon pool: {e}")))?,
+        )
+    } else {
+        None
+    };
+
+    py.allow_threads(|| {
+        let mut run = || {
+            out_slice
+                .par_chunks_mut(3)
+                .enumerate()
+                .for_each_init(
+                    || AssocScratch::new(p),
+                    |scr, (idx, out_row)| {
+                        scr.reset();
+
+                        // c = X'Wg , d = g'Wg, e = g'Wy
+                        let mut d = 0.0_f64;
+                        let mut e = 0.0_f64;
+
+                        for i in 0..n {
+                            let gi = g_arr[(idx, i)] as f64;
+                            let wi = w[i];
+                            let yi = y[i];
+                            let xrow = &xcov_flat[i * p..(i + 1) * p];
+
+                            let wgi = wi * gi;
+                            d += wgi * gi;
+                            e += wgi * yi;
+
+                            // c[r] += wgi * xrow[r]
+                            for r in 0..p {
+                                scr.c[r] += wgi * xrow[r];
+                            }
+                        }
+
+                        // a_inv_c = A^{-1} c (no alloc)
+                        cholesky_solve_into(&a, p, &scr.c, &mut scr.a_inv_c);
+
+                        // ct_aic = c' A^{-1} c
+                        let ct_aic = dot_loop(&scr.c, &scr.a_inv_c);
+                        let schur = d - ct_aic;
+
+                        if schur <= 1e-12 || !schur.is_finite() {
+                            out_row[0] = f64::NAN;
+                            out_row[1] = f64::NAN;
+                            out_row[2] = f64::NAN;
+                            return;
+                        }
+
+                        // ct_aib = c' A^{-1} b  —— 这里按你要求：一次循环（不调用 dot）
+                        let mut ct_aib = 0.0_f64;
+                        for r in 0..p {
+                            ct_aib += scr.c[r] * a_inv_b[r];
+                        }
+
+                        let num = e - ct_aib;
+                        let beta_g = num / schur;
+
+                        // rWr = yWy - [ b'A^{-1}b + (e - c'A^{-1}b)^2 / schur ]
+                        let q = b_aib + (num * num) / schur;
+                        let rwr = (ywy - q).max(0.0);
+                        let sigma2 = rwr / (df as f64);
+
+                        let se_g = (sigma2 / schur).sqrt();
+                        let pval = if se_g.is_finite() && se_g > 0.0 && beta_g.is_finite() {
+                            let z = (beta_g / se_g).abs();
+                            (2.0 * normal_sf(z)).clamp(f64::MIN_POSITIVE, 1.0)
+                        } else {
+                            1.0
+                        };
+
+                        out_row[0] = beta_g;
+                        out_row[1] = se_g;
+                        out_row[2] = pval;
+                    },
+                );
+        };
+
+        if let Some(tp) = &pool {
+            tp.install(run);
+        } else {
+            run();
+        }
+    });
+
+    Ok(out)
+}

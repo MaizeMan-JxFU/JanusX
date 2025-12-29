@@ -45,7 +45,7 @@ from joblib import Parallel, delayed, cpu_count
 from tqdm import trange
 
 # Rust core kernels (PyO3 extension)
-from ..janusx import glmf32, lmm_reml_chunk_f32
+from ..janusx import glmf32, lmm_reml_chunk_f32, lmm_assoc_chunk_f32
 
 
 def FEM(
@@ -243,6 +243,39 @@ def lmm_reml(
     return beta_se_p, lambdas
 
 
+def lmm_assoc_fixed(
+    S: np.ndarray,
+    Xcov: np.ndarray,
+    y_rot: np.ndarray,
+    Dh: np.ndarray,
+    snp_chunk: np.ndarray,
+    log10_lbd: float,
+    threads: int = 4,
+) -> np.ndarray:
+    """
+    Fixed-lambda LMM scan on a SNP chunk using a Rust kernel.
+
+    This wraps `lmm_assoc_chunk_f32` and uses a single fixed log10(lambda)
+    for all SNPs in the chunk.
+    """
+    S = np.ascontiguousarray(S, dtype=np.float64).ravel()
+    Xcov = np.ascontiguousarray(Xcov, dtype=np.float64)
+    y_rot = np.ascontiguousarray(y_rot, dtype=np.float64).ravel()
+
+    g_rot_chunk = snp_chunk @ Dh.T
+    g_rot_chunk = np.ascontiguousarray(g_rot_chunk, dtype=np.float32)
+
+    beta_se_p = lmm_assoc_chunk_f32(
+        S,
+        Xcov,
+        y_rot,
+        float(log10_lbd),
+        g_rot_chunk,
+        int(threads),
+    )
+    return beta_se_p
+
+
 class LMM:
     """
     Fast LMM GWAS using eigen-decomposition of kinship + REML per SNP (Rust).
@@ -403,6 +436,29 @@ class LMM:
             threads=threads,
         )
         self.lbd = lambdas
+        return beta_se_p
+
+
+class FastLMM(LMM):
+    """
+    Fast LMM GWAS using a fixed lambda for all SNPs (Rust kernel).
+    """
+
+    def gwas(self, snp: np.ndarray, threads: int = 1) -> np.ndarray:
+        if self.pve < 0.05 or self.pve > 0.95:
+            return super().gwas(snp, threads=threads)
+
+        log10_lbd = float(np.log10(self.lbd_null))
+        beta_se_p = lmm_assoc_fixed(
+            self.S,
+            self.Xcov,
+            self.y,
+            self.Dh,
+            snp,
+            log10_lbd,
+            threads=threads,
+        )
+        self.lbd = np.full(beta_se_p.shape[0], self.lbd_null, dtype=np.float64)
         return beta_se_p
 
 
