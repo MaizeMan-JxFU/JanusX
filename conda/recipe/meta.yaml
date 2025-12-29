@@ -1,12 +1,13 @@
 {% set name = "janusx" %}
-{% set version = "1.0.1" %}
+{% set version = "1.0.2" %}
 
 package:
   name: {{ name }}
   version: {{ version }}
 
 source:
-  path: ../..
+  url: https://github.com/MaizeMan-JxFU/JanusX/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: 2f28e77a6ba66eb69909812ded51b9e8f7250070988842a88ee1e2f2f2c17468
 
 build:
   number: 0
@@ -43,3 +44,7 @@ about:
   license: MIT
   license_file: LICENSE
   summary: High-performance GWAS and genomic selection suite
+
+extra:
+  recipe-maintainers:
+    - MaizeMan-JxFU
