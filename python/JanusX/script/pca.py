@@ -219,8 +219,8 @@ def main(log: bool = True):
     # ------------------------- Optional arguments -------------------------
     optional_group = parser.add_argument_group("Optional Arguments")
     optional_group.add_argument(
-        "-o", "--out", type=str, default=None,
-        help="Output directory for PCA results (default: same as genotype/GRM/PC files)",
+        "-o", "--out", type=str, default=".",
+        help="Output directory for PCA results (default: current directory)",
     )
     optional_group.add_argument(
         "-prefix", "--prefix", type=str, default=None,
@@ -270,7 +270,7 @@ def main(log: bool = True):
         raise ValueError("No valid input found; one of --vcf/--bfile/--grm/--pcfile must be provided.")
 
     gfile = gfile.replace("\\", "/")
-    args.out = os.path.dirname(gfile) if args.out is None else args.out
+    args.out = args.out if args.out is not None else "."
 
     # Keep index for logging but convert to actual color palette
     palette_idx = args.color

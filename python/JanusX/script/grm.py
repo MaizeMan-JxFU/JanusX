@@ -167,8 +167,8 @@ def main(log: bool = True):
     # ------------------------------------------------------------------
     optional_group = parser.add_argument_group("Optional Arguments")
     optional_group.add_argument(
-        "-o", "--out", type=str, default=None,
-        help="Output directory for results (default: same as genotype file)",
+        "-o", "--out", type=str, default=".",
+        help="Output directory for results (default: current directory)",
     )
     optional_group.add_argument(
         "-prefix", "--prefix", type=str, default=None,
@@ -204,7 +204,7 @@ def main(log: bool = True):
         raise ValueError("One of --vcf or --bfile must be provided.")
 
     gfile = gfile.replace("\\", "/")
-    args.out = os.path.dirname(gfile) if args.out is None else args.out
+    args.out = args.out if args.out is not None else "."
 
     # ------------------------------------------------------------------
     # Logging

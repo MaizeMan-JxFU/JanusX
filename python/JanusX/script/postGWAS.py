@@ -333,8 +333,8 @@ def main():
         help="Attribute key used as description in GFF file (default: %(default)s)",
     )
     optional_group.add_argument(
-        "-o", "--out", type=str, default=None,
-        help="Output directory for plots and annotation (default: same as first file)",
+        "-o", "--out", type=str, default=".",
+        help="Output directory for plots and annotation (default: current directory)",
     )
     optional_group.add_argument(
         "-prefix", "--prefix", type=str, default=None,
@@ -360,7 +360,7 @@ def main():
         args.color = None
     else:
         args.color = color_set[args.color]
-    args.out = os.path.dirname(args.file[0]) if args.out is None else args.out
+    args.out = args.out if args.out is not None else "."
     args.prefix = "JanusX" if args.prefix is None else args.prefix
 
     # Create output directory if needed

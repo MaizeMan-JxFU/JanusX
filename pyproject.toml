@@ -2,16 +2,15 @@
 name = "JanusX"
 version = "1.0.1"
 description = "A Suite of Genotyping Tools for Genome-Wide Association Study and Genomic Selection"
-requires-python = ">=3.9"
+requires-python = ">=3.9,<3.13"
 dependencies = [
     "numpy",
-    "pandas",
+    "pandas<3.0",
     "scipy",
-    "scikit-learn",
     "matplotlib",
-    "plotly",
     "psutil",
     "tqdm",
+    "scikit-learn==1.8.0",
     "joblib>=1.5.2",
 ]
 authors = [

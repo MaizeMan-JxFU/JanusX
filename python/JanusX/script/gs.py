@@ -304,9 +304,8 @@ def main(log: bool = True) -> None:
     optional_group.add_argument(
         "-o", "--out",
         type=str,
-        default=None,
-        help="Output directory for results "
-             "(default: same directory as genotype file)",
+        default=".",
+        help="Output directory for results (default: current directory)",
     )
     optional_group.add_argument(
         "-prefix", "--prefix",
@@ -339,7 +338,7 @@ def main(log: bool = True) -> None:
         raise ValueError("No genotype input detected. Use -vcf, -bfile or -npy.")
 
     gfile = gfile.replace("\\", "/")  # Normalize Windows-style paths
-    args.out = os.path.dirname(gfile) if args.out is None else args.out
+    args.out = args.out if args.out is not None else "."
 
     # ------------------------------------------------------------------
     # Logger
