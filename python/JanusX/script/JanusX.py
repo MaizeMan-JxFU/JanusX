@@ -20,7 +20,7 @@ __logo__ = r'''
  | |__| | (_| | | | | |_| \__ \/ . \ 
   \____/ \__,_|_| |_|\__,_|___/_/ \_\
 '''
-__version__ = 'JanusX v1.0.1'
+__version__ = 'JanusX v1.0.2'
 
 def main():
     module = dict(zip(['gwas','postGWAS','grm','pca','gs','sim'],
