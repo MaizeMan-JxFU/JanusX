@@ -36,3 +36,4 @@ python-source = "python"
 
 [project.scripts]
 jx = "JanusX.script.JanusX:main"
+
