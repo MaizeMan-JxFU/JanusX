@@ -12,12 +12,14 @@ source:
 build:
   number: 0
   skip: true  # [py<310 or py>312]
+  script: {{ PYTHON }} -m pip install . -vv --no-deps
   run_exports:
     - {{ pin_subpackage('janusx', max_pin='x.x') }}
 
 requirements:
   build:
     - {{ compiler('c') }}
+    - {{ stdlib("c") }}
     - {{ compiler('rust') }}
   host:
     - python
@@ -35,9 +37,9 @@ requirements:
     - joblib ==1.5.2
 
 test:
-  imports:
-    - JanusX
   commands:
+    - python -V
+    - python -X faulthandler -c "import JanusX; import JanusX.janusx; print('JanusX import OK')"
     - jx -h
 
 about:
