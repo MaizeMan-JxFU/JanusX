@@ -12,10 +12,6 @@ wheels/
 venv
 .vscode
 
-# Project CLI binaries
-jx
-jx.bat
-
 # GWAS outputs (large matrices)
 example/*.q.*
 example/*.k.*
