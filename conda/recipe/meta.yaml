@@ -21,6 +21,7 @@ requirements:
     - {{ compiler('c') }}
     - {{ stdlib("c") }}
     - {{ compiler('rust') }}
+    - rust >=1.90
   host:
     - python
     - pip
