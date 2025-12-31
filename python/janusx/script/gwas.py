@@ -365,7 +365,6 @@ def prepare_streaming_context(
     genofile: str,
     phenofile: str,
     pheno_cols: list[int] | None,
-    outprefix: str,
     maf_threshold: float,
     max_missing_rate: float,
     chunk_size: int,
@@ -661,7 +660,7 @@ def run_farmcpu_fullmem(
     args,
     gfile: str,
     prefix: str,
-    logger,
+    logger: logging.Logger,
     pheno_preloaded: pd.DataFrame | None = None,
 ) -> None:
     """
