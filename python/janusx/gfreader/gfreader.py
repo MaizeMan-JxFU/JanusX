@@ -13,7 +13,8 @@ def load_genotype_chunks(
     path_or_prefix: str,
     chunk_size: int = 50000,
     maf: float = 0.0,
-    missing_rate: float = 1.0
+    missing_rate: float = 1.0,
+    impute: bool = True,
 ):
     """
     High-level Python interface for reading genotype data in chunks
@@ -44,13 +45,17 @@ def load_genotype_chunks(
         Maximum allowed missing genotype rate per SNP.
         SNPs exceeding this threshold are filtered out.
 
+    impute : bool
+        Whether to mean-impute missing genotypes.
+        If False, missing values remain negative (e.g. -9).
+
     Yields
     ------
     geno : np.ndarray, shape (n_snps_chunk, n_samples), dtype=float32
         SNP-major genotype block.
         Each block is:
           - already MAF-flipped (ALT freq <= 0.5)
-          - mean-imputed for missing genotypes
+          - mean-imputed for missing genotypes (if impute=True)
           - dense float32 array backed by Rust memory
 
     sites : list[SiteInfo]
@@ -80,6 +85,7 @@ def load_genotype_chunks(
             path_or_prefix,
             float(maf),
             float(missing_rate),
+            bool(impute),
         )
     else:
         # Otherwise treat it as PLINK BED prefix
@@ -87,6 +93,7 @@ def load_genotype_chunks(
             path_or_prefix,
             float(maf),
             float(missing_rate),
+            bool(impute),
         )
 
     # 2) Iterate until exhausted
@@ -102,7 +109,7 @@ def load_genotype_chunks(
         geno_np = np.asarray(geno, dtype=np.float32)
 
         yield geno_np, sites
-    
+
 def inspect_genotype_file(path_or_prefix: str):
     """
     Inspect the genotype input and return sample IDs and the SNP count.

@@ -1,4 +1,9 @@
 import time
+from importlib.metadata import version, PackageNotFoundError
+try:
+    v = version("janusx")
+except PackageNotFoundError:
+    v = "0.0.0"
 from itertools import takewhile,repeat
 from .gfreader import load_genotype_chunks, inspect_genotype_file
 import numpy as np
@@ -207,23 +212,10 @@ def vcfinfo():
     alltime = time.localtime()
     vcf_info = f'''##fileformat=VCFv4.2
 ##fileDate={alltime.tm_year}{alltime.tm_mon}{alltime.tm_mday}
-##source="greader.1.1"
+##source="JanusX-v{v}"
 ##INFO=<ID=PR,Number=0,Type=Flag,Description="Provisional reference allele, may not be based on real reference genome">
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'''
     return vcf_info
-
-def genotypeMerge(geno:pd.DataFrame,genolist:list=[]):
-    chr_loc:pd.Index = geno.index
-    ref_alt = geno.iloc[:,:2]
-    for geno_merge in genolist:
-        print(geno_merge)
-    return geno
-
-def genotype2npy(geno: pd.DataFrame,outPrefix:str=None):
-    '''geno: index-(chr,pos),columns-(ref,alt,sample1,sample2,...)'''
-    geno.iloc[:,:2].to_csv(f'{outPrefix}.snp',header=None,sep='\t')
-    geno.columns[2:].to_frame().to_csv(f'{outPrefix}.idv',header=None,index=None,sep='\t')
-    np.savez_compressed(f'{outPrefix}.npz',geno.iloc[:,2:].values)
     
 def genotype2vcf(geno:pd.DataFrame,outPrefix:str=None,chunksize:int=10_000):
     import warnings

@@ -10,7 +10,7 @@ warnings.filterwarnings(
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.backends.backend_pdf # pdf support
-from janusx.script import gwas,gs,postGWAS,grm,pca,sim
+from janusx.script import gwas,gs,postGWAS,grm,pca,sim,gmerge
 from importlib.metadata import version, PackageNotFoundError
 try:
     v = version("janusx")
@@ -35,8 +35,8 @@ __version__ = (
 )
 
 def main():
-    module = dict(zip(['gwas','postGWAS','grm','pca','gs','sim'],
-                      [gwas,postGWAS,grm,pca,gs,sim]))
+    module = dict(zip(['gwas','postGWAS','grm','pca','gs','sim','gmerge'],
+                      [gwas,postGWAS,grm,pca,gs,sim,gmerge]))
     print(__logo__)
     if len(sys.argv)>1:
         if sys.argv[1] == '-h' or sys.argv[1] == '--help':
