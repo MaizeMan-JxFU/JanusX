@@ -47,11 +47,17 @@ pub struct BedChunkReader {
 #[pymethods]
 impl BedChunkReader {
     #[new]
-    #[pyo3(signature = (prefix, maf_threshold=None, max_missing_rate=None))]
-    fn new(prefix: String, maf_threshold: Option<f32>, max_missing_rate: Option<f32>) -> PyResult<Self> {
+    #[pyo3(signature = (prefix, maf_threshold=None, max_missing_rate=None, fill_missing=None))]
+    fn new(
+        prefix: String,
+        maf_threshold: Option<f32>,
+        max_missing_rate: Option<f32>,
+        fill_missing: Option<bool>,
+    ) -> PyResult<Self> {
         let maf = maf_threshold.unwrap_or(0.0);
         let miss = max_missing_rate.unwrap_or(1.0);
-        let it = BedSnpIter::new(&prefix, maf, miss)
+        let fill = fill_missing.unwrap_or(true);
+        let it = BedSnpIter::new_with_fill(&prefix, maf, miss, fill)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
         Ok(Self { it })
     }
@@ -108,11 +114,17 @@ pub struct VcfChunkReader {
 #[pymethods]
 impl VcfChunkReader {
     #[new]
-    #[pyo3(signature = (path, maf_threshold=None, max_missing_rate=None))]
-    fn new(path: String, maf_threshold: Option<f32>, max_missing_rate: Option<f32>) -> PyResult<Self> {
+    #[pyo3(signature = (path, maf_threshold=None, max_missing_rate=None, fill_missing=None))]
+    fn new(
+        path: String,
+        maf_threshold: Option<f32>,
+        max_missing_rate: Option<f32>,
+        fill_missing: Option<bool>,
+    ) -> PyResult<Self> {
         let maf = maf_threshold.unwrap_or(0.0);
         let miss = max_missing_rate.unwrap_or(1.0);
-        let it = VcfSnpIter::new(&path, maf, miss)
+        let fill = fill_missing.unwrap_or(true);
+        let it = VcfSnpIter::new_with_fill(&path, maf, miss, fill)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))?;
         Ok(Self { it })
     }

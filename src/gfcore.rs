@@ -87,6 +87,7 @@ pub fn process_snp_row(
     alt_allele: &mut String,
     maf_threshold: f32,
     max_missing_rate: f32,
+    fill_missing: bool,
 ) -> bool {
     let mut alt_sum: f64 = 0.0;
     let mut non_missing: i64 = 0;
@@ -112,7 +113,9 @@ pub fn process_snp_row(
         if maf_threshold > 0.0 {
             return false;
         } else {
-            row.fill(0.0);
+            if fill_missing {
+                row.fill(0.0);
+            }
             return true;
         }
     }
@@ -135,11 +138,13 @@ pub fn process_snp_row(
         return false;
     }
 
-    let mean_g = alt_sum / non_missing as f64;
-    let imputed: f32 = mean_g as f32;
-    for g in row.iter_mut() {
-        if *g < 0.0 {
-            *g = imputed;
+    if fill_missing {
+        let mean_g = alt_sum / non_missing as f64;
+        let imputed: f32 = mean_g as f32;
+        for g in row.iter_mut() {
+            if *g < 0.0 {
+                *g = imputed;
+            }
         }
     }
 
@@ -161,10 +166,15 @@ pub struct BedSnpIter {
     cur: usize,
     maf: f32,
     miss: f32,
+    fill_missing: bool,
 }
 
 impl BedSnpIter {
     pub fn new(prefix: &str, maf: f32, miss: f32) -> Result<Self, String> {
+        Self::new_with_fill(prefix, maf, miss, true)
+    }
+
+    pub fn new_with_fill(prefix: &str, maf: f32, miss: f32, fill_missing: bool) -> Result<Self, String> {
         let samples = read_fam(prefix)?;
         let sites = read_bim(prefix)?;
         let n_samples = samples.len();
@@ -194,6 +204,7 @@ impl BedSnpIter {
             cur: 0,
             maf,
             miss,
+            fill_missing,
         })
     }
 
@@ -231,6 +242,7 @@ impl BedSnpIter {
             &mut site.alt_allele,
             self.maf,
             self.miss,
+            self.fill_missing,
         );
         if keep { Some((row, site)) } else { None }
     }
@@ -265,7 +277,14 @@ impl BedSnpIter {
             }
 
             let mut site = self.sites[snp_idx].clone();
-            let keep = process_snp_row(&mut row, &mut site.ref_allele, &mut site.alt_allele, self.maf, self.miss);
+            let keep = process_snp_row(
+                &mut row,
+                &mut site.ref_allele,
+                &mut site.alt_allele,
+                self.maf,
+                self.miss,
+                self.fill_missing,
+            );
             if keep {
                 return Some((row, site));
             }
@@ -282,11 +301,16 @@ pub struct VcfSnpIter {
     reader: Box<dyn BufRead + Send>,
     maf: f32,
     miss: f32,
+    fill_missing: bool,
     finished: bool,
 }
 
 impl VcfSnpIter {
     pub fn new(path: &str, maf: f32, miss: f32) -> Result<Self, String> {
+        Self::new_with_fill(path, maf, miss, true)
+    }
+
+    pub fn new_with_fill(path: &str, maf: f32, miss: f32, fill_missing: bool) -> Result<Self, String> {
         let p = Path::new(path);
         let mut reader = open_text_maybe_gz(p)?;
 
@@ -309,7 +333,14 @@ impl VcfSnpIter {
             }
         }
 
-        Ok(Self { samples, reader, maf, miss, finished: false })
+        Ok(Self {
+            samples,
+            reader,
+            maf,
+            miss,
+            fill_missing,
+            finished: false,
+        })
     }
 
     pub fn n_samples(&self) -> usize { self.samples.len() }
@@ -353,7 +384,14 @@ impl VcfSnpIter {
                 row.push(g);
             }
 
-            let keep = process_snp_row(&mut row, &mut site.ref_allele, &mut site.alt_allele, self.maf, self.miss);
+            let keep = process_snp_row(
+                &mut row,
+                &mut site.ref_allele,
+                &mut site.alt_allele,
+                self.maf,
+                self.miss,
+                self.fill_missing,
+            );
             if keep {
                 return Some((row, site));
             }
