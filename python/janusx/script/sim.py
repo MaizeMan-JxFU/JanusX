@@ -43,8 +43,11 @@ def main():
             save_genotype_streaming(outprefix,samples.tolist(),chunks,total_snps=nsnp)
             y = np.concatenate([samples.reshape(-1,1),samples.reshape(-1,1),y],axis=1,dtype=object)
             ynew = np.concatenate([[['tag','test']],y[:,[1,2]]],dtype=object)
+            ynewNA = ynew.copy()
+            ynewNA[-int(ynew.size*0.1):,1] = 'NA'
             np.savetxt(f'{outprefix}.pheno',y,delimiter='\t',fmt=['%s', '%s', '%.3f'])
             np.savetxt(f'{outprefix}.pheno.txt',ynew,delimiter='\t',fmt=['%s', '%s'])
+            np.savetxt(f'{outprefix}.pheno.NA.txt',ynewNA,delimiter='\t',fmt=['%s', '%s'])
         else:
             print("Usage: jx sim <nsnp_k> <n_individuals> <outprefix>")
     else:
