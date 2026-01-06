@@ -211,6 +211,13 @@ def main(log: bool = True) -> None:
              "(default: %(default)s).",
     )
     optional_group.add_argument(
+        "-cv", "--cv",
+        type=int,
+        default=None,
+        help="K fold of cross-validazation for models. "
+             "(default: %(default)s).",
+    )
+    optional_group.add_argument(
         "-plot", "--plot",
         action="store_true",
         default=False,
@@ -371,7 +378,8 @@ def main(log: bool = True) -> None:
             continue
 
         # 5-fold cross-validation on training population
-        kfoldset = kfold(train_snp.shape[1], k=5, seed=None)
+        if args.cv is not None:
+            kfoldset = kfold(train_snp.shape[1], k=int(args.cv), seed=None)
         outpred_list = []
 
         for idx_method, method in enumerate(methods, start=1):
@@ -382,49 +390,50 @@ def main(log: bool = True) -> None:
             r2_test = []
             fold_id = 0
 
-            for test_idx, train_idx in kfoldset:
-                fold_id += 1
-                t_fold = time.time()
+            if args.cv is not None:
+                for test_idx, train_idx in kfoldset:
+                    fold_id += 1
+                    t_fold = time.time()
 
-                yhat_train, yhat_test = GSapi(
-                    train_pheno[train_idx],
-                    train_snp[:, train_idx],
-                    train_snp[:, test_idx],
-                    method=method,
-                    PCAdec=args.pcd,
-                )
+                    yhat_train, yhat_test = GSapi(
+                        train_pheno[train_idx],
+                        train_snp[:, train_idx],
+                        train_snp[:, test_idx],
+                        method=method,
+                        PCAdec=args.pcd,
+                    )
 
-                ttest = np.concatenate([train_pheno[test_idx], yhat_test], axis=1)
-                ttrain = np.concatenate([train_pheno[train_idx], yhat_train], axis=1)
+                    ttest = np.concatenate([train_pheno[test_idx], yhat_test], axis=1)
+                    ttrain = np.concatenate([train_pheno[train_idx], yhat_train], axis=1)
 
-                fold_test_pairs.append(ttest)
-                fold_train_pairs.append(ttrain)
+                    fold_test_pairs.append(ttest)
+                    fold_train_pairs.append(ttrain)
 
-                ss_res = np.sum((ttest[:, 0] - ttest[:, 1]) ** 2)
-                ss_tot = np.sum((ttest[:, 0] - ttest[:, 0].mean()) ** 2)
-                r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
-                r2_test.append(r2)
+                    ss_res = np.sum((ttest[:, 0] - ttest[:, 1]) ** 2)
+                    ss_tot = np.sum((ttest[:, 0] - ttest[:, 0].mean()) ** 2)
+                    r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+                    r2_test.append(r2)
 
-                pear = pearsonr(ttest[:, 0], ttest[:, 1]).statistic
-                spear = spearmanr(ttest[:, 0], ttest[:, 1]).statistic
-                logger.info(
-                    f"Fold{fold_id}: "
-                    f"{pear:.2f} (Pearson), {spear:.2f} (Spearman), "
-                    f"{r2:.2f} (R²). "
-                    f"Time cost: {(time.time() - t_fold):.2f} secs"
-                )
+                    pear = pearsonr(ttest[:, 0], ttest[:, 1]).statistic
+                    spear = spearmanr(ttest[:, 0], ttest[:, 1]).statistic
+                    logger.info(
+                        f"Fold{fold_id}: "
+                        f"{pear:.2f} (Pearson), {spear:.2f} (Spearman), "
+                        f"{r2:.2f} (R²). "
+                        f"Time cost: {(time.time() - t_fold):.2f} secs"
+                    )
 
-            # Use the fold with highest R² for plotting
-            best_idx = int(np.argmax(r2_test))
-            best_test = fold_test_pairs[best_idx]
-            best_train = fold_train_pairs[best_idx]
+                # Use the fold with highest R² for plotting
+                best_idx = int(np.argmax(r2_test))
+                best_test = fold_test_pairs[best_idx]
+                best_train = fold_train_pairs[best_idx]
 
-            if args.plot:
-                fig = plt.figure(figsize=(5, 4), dpi=300)
-                gsplot.scatterh(best_test, best_train, color_set=color_set[0], fig=fig)
-                out_svg = f"{args.out}/{args.prefix}.{trait_name}.gs.{method}.svg"
-                plt.savefig(out_svg, transparent=False, facecolor="white")
-                plt.close(fig)
+                if args.plot:
+                    fig = plt.figure(figsize=(5, 4), dpi=300)
+                    gsplot.scatterh(best_test, best_train, color_set=color_set[0], fig=fig)
+                    out_svg = f"{args.out}/{args.prefix}.{trait_name}.gs.{method}.svg"
+                    plt.savefig(out_svg, transparent=False, facecolor="white")
+                    plt.close(fig)
 
             # ------------------------------------------------------------------
             # Final prediction on test population
